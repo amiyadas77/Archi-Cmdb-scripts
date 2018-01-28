@@ -1,0 +1,135 @@
+SourceClass,TargetClass,ArchimateRelationship,CMDB Relationship,Keep relationship direction
+cmdb_ci_aix_server,cmdb_ci_appl,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_aix_server,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_aix_server,cmdb_ci_aix_server,CompositionRelationship,Virtualized by::Virtualizes,FALSE
+cmdb_ci_aix_server,cmdb_ci_db_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_aix_server,cmdb_ci_db_ora_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_aix_server,cmdb_ci_db_db2_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_aix_server,cmdb_ci_cluster,RealizationRelationship,Members::Member of,FALSE
+cmdb_ci_aix_server,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_appl,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_appl,cmdb_ci_db_instance,CompositionRelationship,Depends on::Used by, True
+cmdb_ci_appl,cmdb_ci_db_ora_instance,CompositionRelationship,Depends on::Used by, True
+cmdb_ci_appl,cmdb_ci_db_mssql_instance,CompositionRelationship,Depends on::Used by, True
+cmdb_ci_appl,cmdb_ci_db_db2_instance,CompositionRelationship,Depends on::Used by, True
+cmdb_ci_appl,cmdb_ci_db_mysql_instance,CompositionRelationship,Depends on::Used by, True
+cmdb_ci_appl,cmdb_ci_db_syb_instance,CompositionRelationship,Depends on::Used by, True
+cmdb_ci_appl,cmdb_ci_appl,CompositionRelationship,Depends on::Used by,TRUE
+cmdb_ci_appl,cmdb_ci_appl,ServingRelationship,Depends on::Used by,FALSE
+cmdb_ci_appl,cmdb_ci_appl,SpecializationRelationship,PASS-THRU,FALSE
+cmdb_ci_appl,cmdb_ci_cluster,RealizationRelationship,PASS-THRU,FALSE
+cmdb_ci_cluster,cmdb_ci_db_instance,ServingRelationship,PASS-THRU, False
+cmdb_ci_cluster,cmdb_ci_appl,ServingRelationship,PASS-THRU, False
+cmdb_ci_cluster,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_cluster,cmdb_ci_aix_server,CompositionRelationship,Members::Member of,TRUE
+cmdb_ci_cluster,cmdb_ci_linux_server,CompositionRelationship,Members::Member of,TRUE
+cmdb_ci_cluster,cmdb_ci_vmware_instance,CompositionRelationship,Members::Member of,TRUE
+cmdb_ci_cluster,cmdb_ci_win_server,CompositionRelationship,Members::Member of,TRUE
+cmdb_ci_cluster,cmdb_ci_server,CompositionRelationship,Members::Member of,TRUE
+cmdb_ci_cluster,cmdb_ci_vm_instance,CompositionRelationship,Members::Member of,TRUE
+cmdb_ci_container_object,cmdb_ci_vmware_instance,ServingRelationship,Depends on::Used by, False
+cmdb_ci_container_object,cmdb_ci_win_server,ServingRelationship,Depends on::Used by, False
+cmdb_ci_container_object,cmdb_ci_aix_server,ServingRelationship,Depends on::Used by, False
+cmdb_ci_container_object,cmdb_ci_linux_server,ServingRelationship,Depends on::Used by, False
+cmdb_ci_container_object,cmdb_ci_esx_server,ServingRelationship,Depends on::Used by, False
+cmdb_ci_container_object,cmdb_ci_server,ServingRelationship,Depends on::Used by,FALSE
+cmdb_ci_container_object,cmdb_ci_vm_instance,ServingRelationship,Depends on::Used by, False
+cmdb_ci_db_db2_instance,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
+cmdb_ci_db_instance,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
+cmdb_ci_db_mssql_instance,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
+cmdb_ci_db_mysql_instance,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
+cmdb_ci_db_ora_instance,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
+cmdb_ci_db_syb_instance,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
+cmdb_ci_esx_server,cmdb_ci_vmware_instance,CompositionRelationship,Virtualized by::Virtualizes,FALSE
+cmdb_ci_esx_server,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_esx_server,cmdb_ci_lb,CompositionRelationship,Depends on::Used by,FALSE
+cmdb_ci_esx_server,cmdb_ci_vm_instance,CompositionRelationship,Virtualized by::Virtualizes,FALSE
+cmdb_ci_ip_firewall,service_offering,ServingRelationship,Depends on::Used by,FALSE
+cmdb_ci_ip_firewall,cmdb_ci_appl,ServingRelationship,Depends on::Used by,FALSE
+cmdb_ci_lb,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_lb_appl,cmdb_ci_appl,ServingRelationship,Depends on::Used by,FALSE
+cmdb_ci_lb_appl,service_offering,ServingRelationship,Depends on::Used by,FALSE
+cmdb_ci_linux_server,cmdb_ci_appl,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_linux_server,cmdb_ci_db_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,cmdb_ci_db_ora_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,cmdb_ci_db_mssql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,cmdb_ci_db_db2_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,cmdb_ci_db_mysql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,cmdb_ci_db_syb_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_linux_server,cmdb_ci_cluster,RealizationRelationship,Members::Member of,FALSE
+cmdb_ci_linux_server,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_rack,cmdb_ci_esx_server,CompositionRelationship,In Rack::Rack contains,FALSE
+cmdb_ci_server,cmdb_ci_appl,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_storage_server,cmdb_ci_container_object,ServingRelationship,Hosted on::Hosts,FALSE
+cmdb_ci_storage_server,cmdb_ci_storage_switch,CompositionRelationship,Depends on::Used by,TRUE
+cmdb_ci_storage_server,cmdb_ci_storage_server,CompositionRelationship,Depends on::Used by,TRUE
+cmdb_ci_server,cmdb_ci_db_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_db_ora_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_db_mssql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_db_db2_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_db_mysql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_db_syb_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_server,CompositionRelationship,Depends on::Used by,TRUE
+cmdb_ci_storage_server,cmdb_ci_storage_server,ServingRelationship,Contained By::Contains,FALSE
+cmdb_ci_vm_instance,cmdb_ci_appl,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_vm_instance,cmdb_ci_db_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_db_ora_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_db_mssql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_db_db2_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_db_mysql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_db_syb_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_cluster,RealizationRelationship,Members::Member of,FALSE
+cmdb_ci_vm_instance,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_vm_instance,cmdb_ci_vmware_instance,ServingRelationship,PASS-THRU,FALSE
+cmdb_ci_vm_instance,cmdb_ci_vm_instance,ServingRelationship,PASS-THRU,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_appl,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_vmware_instance,cmdb_ci_db_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_db_ora_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_db_mssql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_db_db2_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_db_mysql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_db_syb_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_cluster,RealizationRelationship,Members::Member of,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_vmware_instance,ServingRelationship,PASS-THRU,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_vm_instance,ServingRelationship,PASS-THRU,FALSE
+cmdb_ci_win_server,cmdb_ci_appl,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,service_offering,ServingRelationship,Depends on::Used by, False
+cmdb_ci_win_server,cmdb_ci_db_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_db_ora_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_db_mssql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_db_db2_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_db_mysql_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_db_syb_instance,ServingRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_cluster,RealizationRelationship,Members::Member of,FALSE
+cmdb_ci_win_server,cmdb_ci_lb_appl,RealizationRelationship,Depends on::Used by,FALSE
+service_offering,service_offering,ServingRelationship,Depends on::Used by, False
+service_offering,cmdb_ci_appl,ServingRelationship,PASS-THRU,FALSE
+cmdb_ci_cluster,cmdb_ci_appl,RealizationRelationship,PASS-THRU, False
+cmdb_ci_db_db2_instance,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_db_instance,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_db_mssql_instance,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_db_mysql_instance,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_db_ora_instance,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_db_syb_instance,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_ip_firewall,cmdb_ci_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_lb_appl,cmdb_ci_appl,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_linux_server,cmdb_ci_appl,RealizationRelationship,Runs on::Runs,FALSE
+cmdb_ci_server,cmdb_ci_appl,RealizationRelationship,Runs on::Runs,FALSE
+cmdb_ci_vm_instance,cmdb_ci_appl,RealizationRelationship,Runs on::Runs,FALSE
+cmdb_ci_vmware_instance,cmdb_ci_appl,RealizationRelationship,Runs on::Runs,FALSE
+cmdb_ci_win_server,cmdb_ci_appl,RealizationRelationship,Runs on::Runs,FALSE
+cmdb_ci_aix_server,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_appl,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_cluster,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_ip_firewall,service_offering,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_lb_appl,service_offering,RealizationRelationship,Depends on::Used by,FALSE
+cmdb_ci_linux_server,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_server,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_vm_instance,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_vmware_instance,service_offering,RealizationRelationship,Depends on::Used by, False
+cmdb_ci_win_server,service_offering,RealizationRelationship,Depends on::Used by, False

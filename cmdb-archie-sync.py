@@ -1,5 +1,5 @@
-#Archie EA tool to Snow CMDB synchronisation script
-#Generate Monitoring object determined by the CMDB class
+#Snow CMDB synchronisation with Archie - Archie import
+#Compares CMDB export with Archie export and creates both Archie and CMDB import entries
 #Author: Danny Andersen
 
 import sys
@@ -174,7 +174,6 @@ for line in frels:
 	lstr += line.rstrip('\n\r')
 	if lstr.endswith('"'):
 		fs = lstr.split(",")
-		#relKey = fs[4].strip('"') + "-" + fs[1].strip('"') + "-" + fs[5].strip('"')
 		relKey = (fs[4].strip('"'), fs[1].strip('"'),fs[5].strip('"'))
 		existingRels[relKey] = fs[0].strip('"')
 		lstr = ""

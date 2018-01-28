@@ -129,25 +129,25 @@ storageStr = "Provides storage for::Stored on"
 
 #Add dependencies for passed in id, recursing down the tree - each dependency keyed by dependant, set of (dependency, outage, relationship)
 def addDepend(id, subId):
-	print "app id: %s - dependent id %s\n" % (id, subId)
+	#print "app id: %s - dependent id %s\n" % (id, subId)
 	if subId in alwaysDepends:
 		for dependency in alwaysDepends[subId]:
-			print "A,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
+			#print "A,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
 			cmdbRelSet.add((id, dependency[2], dependency[0], alwaysStr, dependency[1]))
 			addDepend(id, dependency[0])
 	if subId in clusterDepends:
 		for dependency in clusterDepends[subId]:
-			print "C,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
+			#print "C,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
 			cmdbRelSet.add((id, dependency[2], dependency[0], clusterStr, dependency[1]))
 			addDepend(id, dependency[0])
 	if subId in occasionalDepends:
 		for dependency in occasionalDepends[subId]:
-			print "O,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
+			#print "O,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
 			cmdbRelSet.add((id, dependency[2], dependency[0], occStr, dependency[1]))
 			addDepend(id, dependency[0])
 	if subId in infreqDepends:
 		for dependency in infreqDepends[subId]:
-			print "I,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
+			#print "I,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
 			cmdbRelSet.add((id, dependency[2], dependency[0], infreqStr, dependency[1]))
 			addDepend(id, dependency[0])
 

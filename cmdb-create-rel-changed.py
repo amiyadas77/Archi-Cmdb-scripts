@@ -271,6 +271,7 @@ for line in frels:
 					elif newRel not in existingCmdbRelsComplete:
 						#Update to strength / outage, rather than create
 						cmdbRelSet.add((updateOperation, newRel[0], newRel[1], newRel[2], newRel[3], newRel[4]))
+		else:
 			missingRels.add((relByClass, nodesById[srcId], nodesById[targetId]))
 			#print "Rel not allowed in Data model: (%s, %s, %s)" % relByClass
 

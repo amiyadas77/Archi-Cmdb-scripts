@@ -1,5 +1,5 @@
 #Archie EA tool to Snow CMDB synchronisation script
-#Compares CMDB export with Archie export and lists the CMDB Ci where the class needs to be changed
+#Compares CMDB export with Archie export and creates a CSV file that has the correct attributes for enabling monitoring on the CI.
 #Author: Danny Andersen
 
 import sys

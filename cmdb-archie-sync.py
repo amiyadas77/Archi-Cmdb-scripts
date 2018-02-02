@@ -4,13 +4,14 @@
 
 import sys
 import uuid
+import csv
 
 #nodesByName = dict() #Keyed by node name, id of node
 nodesById = dict() # Keyed by node id, name of node
 nodes = dict() #id keyed by name
 cmdb = dict() #Keyed by Name, the cmdb class
 props = dict() #New props, keyed by node id + property name
-propsChanged = dict() #Keyed by id, list of all properties that have changed
+propsChanged = dict() #Keyed by id, set of all properties that have changed
 allPropsById = dict() #dict of dict of all properties found for a particular element keyed by its id  and the prop name
 rels=list() #List of tuples (parent, type, child, name)
 netrels=list() #List of tuples (parent, type, child, name)
@@ -27,6 +28,7 @@ vmList = list() # list of VM ids
 vcenterList = list() # list of vCenter ids
 sanList = list() #List of storage kit
 sanFabricList = list() #List of storage kit
+sanStorageSwList = list() #List of Storage switches
 dbList = list() # list of dbs
 containerList = list() # list of storage containers
 clusterList = list() # list of clusters
@@ -41,6 +43,7 @@ newVMList = list()
 newDatabaseList = list()
 newSanList = list()
 newSanFabricList = list()
+newSanStorageSwList = list()
 newContainerList = list()
 newClusterList = list()
 newHWLBList = list()
@@ -76,16 +79,24 @@ monitorToolName = "CMDB Monitoring Tool"
 isMonitoredName	= "CMDB IsMonitored"
 domainName = "CMDB Domain DNS"
 
-propNameList = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
+propNameSet = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
 					locationName,criticalityName,serviceClassName, installName, \
 					statusName, serialName, opStatusName, domainName, \
 					monitorObName, monitorToolName, isMonitoredName}
 
+propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": deviceTypeName, \
+					osName: "OS Version", "Function Type": fnName, \
+					"IP Address": ipName,  "Manufacturer": manuName, "Model ID": modelName, \
+					"Location": locationName, "Criticality": criticalityName, "Service classification": serviceClassName, \
+					"Installed": installName, "Status": statusName, "Serial number": serialName, \
+					"Operational status": opStatusName, "DNS Domain": domainName, \
+					"Monitoring Object ID": monitorObName, "Monitoring Tool": monitorToolName, "Is Monitored": isMonitoredName }
+					
 computerClass = "Computer"
 printerClass = "Printer"
 appStr = "cmdb_ci_appl"
 appClass = "Application"
-businessStr = "cmdb_ci_service"
+businessStr = "cmdb_ci_service" 
 busServiceClass = "Business Service"
 busOfferStr = "service_offering"
 busOfferingClass = "Service Offering"
@@ -154,6 +165,7 @@ def inSubnet(subnet, mask, ipToCheck):
 	subs = subnet.split('.')
 	mk = mask.split('.')
 	ip = ipToCheck.split('.')
+	#print subnet, mask, ipToCheck
 	return (int(ip[0]) & int(mk[0]) == int(subs[0])) and (int(ip[1]) & int(mk[1]) == int(subs[1])) and int(ip[2]) & int(mk[2]) == int(subs[2]) and int(ip[3]) & int(mk[3]) == int(subs[3])
 
 def findSubnet(ipAddr):
@@ -163,7 +175,48 @@ def findSubnet(ipAddr):
 			ret = (id, subnet, mask)
 			break;
 	return ret
+	
 
+#Process header line and return a dict keyed by column name, with value of field number	
+def processHeader(headerLine):
+	cols = headerLine.strip('\n\r').split(',')
+	colDict = dict()
+	num = 0;
+	for col in cols:
+		colDict[col.strip()] = num
+		num += 1
+	return colDict
+
+#Process header line and return a of each header	
+def getPropList(headerLine):
+	cols = headerLine.strip('\n\r').split(',')
+	return cols
+
+def generateLine(id, columnList, outFile):
+	name = nodesById.get(id)
+	nodeProps = allPropsById[id]
+	propsChangedSet = propsChanged.get(id, set())
+	propsChangedSet.add(cmdbIdName) #ID always changed
+	#Iterate over the template file header cols. For each column, check if we have property set
+	#If property set and it has changed, add it in otherwise write a blank value
+	out = ''
+	changed = False
+	count = 0
+	for col in columnList:
+		if col == "Name": val = name
+		else:
+			propName = propLookup.get(col, '')
+			if propName not in propsChangedSet: val = ''
+			else: 
+				val = nodeProps.get(propName, '')
+				if val == "Unknown": val = ''
+				else:
+					if propName != cmdbIdName: changed = True
+		if count == 0: out = "%s" % val
+		else: out = "%s,%s" % (out, val)
+		count += 1
+	if changed:	print >>outFile, out
+	
 #Read in existing relationships
 frels = open("relations.csv")
 count = 0
@@ -208,7 +261,7 @@ for line in fprops:
 			elif val == businessStr or val == busOfferStr: busServicesList.append(id)
 			elif val == dbInstStr or val == dbSqlStr or val == dbOraStr or val == dbStr \
 				or val == db2DbStr or val == mySqlDbStr or val == sybDbStr : dbList.append(id)
-			elif val == sanSwitchStr: sanFabricList.append(id)
+			elif val == sanSwitchStr: sanStorageSwList.append(id)
 			elif val == sanFabricStr: sanFabricList.append(id)
 			elif val == sanStr: sanList.append(id)
 			elif val == storageServerStr: sanList.append(id)
@@ -225,11 +278,14 @@ fprops.close
 	
 fcmdb = open("SNOW CMDB.csv")
 count = 0
-lstr = ""
+fullStr = ""
 prevStr = False
+cols = dict()
 for lstr in fcmdb:
 	count += 1
-	if count == 1: continue
+	if count == 1:
+		cols = processHeader(lstr)
+		continue
 	if lstr.count('"') % 2 == 1:
 		#Multi-line entry
 		fullStr += lstr
@@ -243,16 +299,23 @@ for lstr in fcmdb:
 	else : #Not multi-line
 		fullStr = lstr
 	prevStr = False
-	fields = fullStr.rstrip('\n\r').split(",")
+	csvList = list()
+	csvList.append(fullStr)
+	fields = csv.reader(csvList, delimiter=',', quotechar = '"').next()
+	#fields = fullStr.rstrip('\n\r').split(",")
+	#print fields[0], fields[1], fields[2], fields[3]
 	fullStr = ''
 	name = fields[1].lower()
 	#if '#' in name: 
 		#Names with this have been decommissioned, but not really in some cases
 		#Only take the name as the bit before the #
 	#	name = name.split('#')[0]
-	cmdbId = fields[0]
-	classField = fields[2]
-	status = fields[5]
+	
+	cmdbId = fields[cols['Unique ID']]
+	classField = fields[cols['Class']]
+	status = fields[cols['Status']]
+	#print cmdbId, classField, status, fields[cols['Updates']]
+	#opStatus = 
 	if status == "Retired": continue
 	cmdbClass = ''
 	if classField == "Computer" or classField == "Printer": continue
@@ -287,20 +350,21 @@ for lstr in fcmdb:
 		print "WARNING: (Snow read 1) CMDB name %s: Unrecognised CMDB class field: %s - ignoring entry" % (name, classField)
 	if cmdbClass != '':
 		cmdb[name] = cmdbId
-		status = fields[5].strip()
-		deviceType = fields[19].strip()
-		funType = fields[23].strip()
-		ipAddr = fields[24].strip()
+		classField = fields[cols['Class']].strip()
+		status = fields[cols['Status']].strip()
+		deviceType = fields[cols['Device Type']].strip()
+		funType = fields[cols['Function Type']].strip()
+		ipAddr = fields[cols['IP Address']].strip()
 		subnet = ('0', '0', '0')
 		if ipAddr != '' : subnet = findSubnet(ipAddr)
-		location = fields[33]
-		manufacturer = fields[34].strip("(Manufacturer)")
-		model = fields[35]
-		isMonitored = fields[29].strip()
-		monitoringObject = fields[36].strip()
-		monitoringTool = fields[38].strip()
-		opStatus = fields[39].strip()
-		serial = fields[42]
+		location = fields[cols['Location']]
+		manufacturer = fields[cols['Manufacturer']].strip("(Manufacturer)").strip()
+		model = fields[cols['Model ID']].strip()
+		isMonitored = fields[cols['Is Monitored']].strip()
+		monitoringObject = fields[cols['Monitoring Object ID']].strip()
+		monitoringTool = fields[cols['Monitoring Tool']].strip()
+		opStatus = fields[cols['Operational status']].strip()
+		serial = fields[cols['Serial number']].strip()
 		cmdbProps[(cmdbId, classPropName)] = cmdbClass
 		if location != '': cmdbProps[(cmdbId, locationName)] = location
 		if deviceType != '': cmdbProps[(cmdbId, deviceTypeName)] = deviceType
@@ -342,6 +406,9 @@ for lstr in fnodes:
 		fullStr = lstr
 	prevStr = False
 	#print fullStr
+	csvList = list()
+	csvList.append(fullStr)
+	#fs = csv.reader(csvList, delimiter=',', quotechar = '"').next()
 	fs = fullStr.rstrip('\n\r').split(",")
 	fullStr = ''
 	#print fs[0], fs[1], fs[2], fs[3]
@@ -364,17 +431,17 @@ for lstr in fnodes:
 	if nodeType == "Node" and "." in name: 
 		firstName = lowerName.split(".")[0]
 		nodesFirstName[firstName] = id
-	propsChanged[id] = list()
+	propsChanged[id] = set()
 	if lowerName in cmdb: #Check props are the same - if not add to CMDB list to change
 		cmdbId = cmdb[lowerName]
-		for propName in propNameList:
-			archieVal = existingProps.get((id, propName), '')
-			cmdbVal = cmdbProps.get((cmdbId, propName), '')
-			if archieVal != '' and archieVal != 'Unknown' and cmdbVal != archieVal:
-				print "%s has a changed property: %s" % (name, propName)
-				propsChanged[id].append(propName)
+		for propName in propNameSet:
+			archieVal = existingProps.get((id, propName), '').strip()
+			cmdbVal = cmdbProps.get((cmdbId, propName))
+			if cmdbVal != None and archieVal != '' and archieVal != 'Unknown' and cmdbVal.strip() != archieVal:
+				print "%s has a changed property: %s (Archi = %s, CMDB = %s" % (name, propName, archieVal, cmdbVal)
+				propsChanged[id].add(propName)
 	else:
-		propsChanged[id] = propNameList  #set all properties on new CI
+		propsChanged[id] = propNameSet  #set all properties on new CI
 	if lowerName not in cmdb or len(propsChanged[id]) > 0: #Generate new or changed things
 		#Add to the correct new CI list
 		if id in appsList: newAppsList.append(id)
@@ -383,6 +450,7 @@ for lstr in fnodes:
 		elif id in busServicesList: newBusServicesList.append(id)
 		elif id in dbList: newDatabaseList.append(id)
 		elif id in sanList: newSanList.append(id)
+		elif id in sanStorageSwList: newSanStorageSwList.append(id)
 		elif id in sanFabricList: newSanFabricList.append(id)
 		elif id in containerList: newContainerList.append(id)
 		elif id in clusterList: newClusterList.append(id)
@@ -474,9 +542,12 @@ fcmdb = open("SNOW CMDB.csv")
 count = 0
 lstr = ""
 prevStr = False
+cols = dict()
 for lstr in fcmdb:
 	count += 1
-	if count == 1: continue
+	if count == 1: 
+		cols = processHeader(lstr)
+		continue
 	if lstr.count('"') % 2 == 1:
 		#Multi-line entry
 		fullStr += lstr
@@ -490,34 +561,38 @@ for lstr in fcmdb:
 	else : #Not multi-line
 		fullStr = lstr
 	prevStr = False
-	fields = fullStr.rstrip('\n\r').split(",")
+	csvList = list()
+	csvList.append(fullStr)
 	fullStr = ''
-	cmdbId = fields[0].strip()
+	fields = csv.reader(csvList, delimiter=',', quotechar = '"').next()
+	#fields = fullStr.rstrip('\n\r').split(",")
+	cmdbId = fields[cols['Unique ID']].strip()
 	if cmdbId == '':
 		print "Ignoring empty or blank row (no cmdb Id)"
 		continue
 	#name = fields[1].strip().split('#')[0]
-	name = fields[1].strip()
+	name = fields[cols['Name']].strip()
 	lowerName = name.lower()
 	# if ".nie.co.uk" in lowerName: 
 		# firstName = lowerName.split(".")[0]
 	# else:
 		# firstName = lowerName
-	classField = fields[2].strip()
-	status = fields[5].strip()
-	deviceType = fields[19].strip()
-	funType = fields[23].strip()
-	ipAddr = fields[24].strip()
+	classField = fields[cols['Class']].strip()
+	status = fields[cols['Status']].strip()
+	deviceType = fields[cols['Device Type']].strip()
+	funType = fields[cols['Function Type']].strip()
+	ipAddr = fields[cols['IP Address']].strip()
+	#print cmdbId, name, classField, status, fields[cols['Updates']]
 	subnet = ('0', '0', '0')
 	if ipAddr != '' : subnet = findSubnet(ipAddr)
-	location = fields[33]
-	manufacturer = fields[34].strip("(Manufacturer)").strip()
-	model = fields[35].strip()
-	isMonitored = fields[29].strip()
-	monitoringObject = fields[36].strip()
-	monitoringTool = fields[38].strip()
-	opStatus = fields[39].strip()
-	serial = fields[42].strip()
+	location = fields[cols['Location']]
+	manufacturer = fields[cols['Manufacturer']].strip("(Manufacturer)").strip()
+	model = fields[cols['Model number']].strip()
+	isMonitored = fields[cols['Is Monitored']].strip()
+	monitoringObject = fields[cols['Monitoring Object ID']].strip()
+	monitoringTool = fields[cols['Monitoring Tool']].strip()
+	opStatus = fields[cols['Operational status']].strip()
+	serial = fields[cols['Serial number']].strip()
 	#skip dev/test / retired / EUC
 	if classField == computerClass or classField == printerClass : continue #Ignore all EUC devices
 	if status == "Retired": continue
@@ -680,20 +755,11 @@ if len(newAppsList) > 0:
 	fapptemplate = open("Application_Import_Template.csv")
 	for t in fapptemplate:
 		print >>fapp,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fapptemplate.close
 	for appId in newAppsList:
-		app = nodesById.get(appId)
-		nodeProps = allPropsById[appId]
-		propsChangedList = propsChanged[appId]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		cmdbMonitorObj = nodeProps.get(monitorObName, '')
-		if monitorObName not in propsChangedList: cmdbMonitorObj = '' # Reset if not changed
-		cmdbTool = nodeProps.get(monitorToolName, '')	
-		if monitorToolName not in propsChangedList: cmdbTool = '' # Reset if not changed
-		print >>fapp, "%s,%s,%s,,,,,,,,,,,,,,%s,,,,,,,,,,,,,%s,,,,,,,,,%s,%s" % \
-						(cmdbId, app, company,nodeDescByName[app],cmdbIsMonitored,cmdbMonitorObj,cmdbTool)
+		generateLine(appId, cols, fapp)
 	fapp.close
 
 if len(newServerList) > 0:
@@ -701,53 +767,11 @@ if len(newServerList) > 0:
 	fservtemplate = open("Server_Import_template.csv")
 	for t in fservtemplate:
 		print >>fserv,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fservtemplate.close
 	for serverId in newServerList:
-		name = nodesById.get(serverId)
-		nodeProps = allPropsById[serverId]
-		cls = nodeProps.get(classPropName, '')
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[serverId]
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		cmdbMonitorObj = nodeProps.get(monitorObName, '')
-		if monitorObName not in propsChangedList: cmdbMonitorObj = '' # Reset if not changed
-		cmdbTool = nodeProps.get(monitorToolName, '')	
-		if monitorToolName not in propsChangedList: cmdbTool = '' # Reset if not changed
-		model = nodeProps.get(modelName, '')
-		if model == "Unknown": model = ''
-		if modelName not in propsChangedList: model = '' # Reset if not changed
-		manufacturer = nodeProps.get(manuName, '')
-		if manufacturer == "Unknown": manufacturer = ''
-		if manuName not in propsChangedList: manufacturer = '' # Reset if not changed
-		fn = nodeProps.get(fnName, '')
-		if fn == "Unknown": fn = ''
-		if fnName not in propsChangedList: fn = '' # Reset if not changed
-		location = nodeProps.get(locationName, '')
-		if location == "Unknown": location = ''
-		if locationName not in propsChangedList: location = '' # Reset if not changed
-		ipAddress = nodeProps.get(ipName, '')
-		if ipAddress == "Unknown": ipAddress = ''
-		if ipName not in propsChangedList: ipAddress = '' # Reset if not changed
-		os = nodeProps.get(osName, '')
-		if os == "Unknown": os = ''
-		if osName not in propsChangedList: os = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		devType = nodeProps.get(deviceTypeName, '')
-		if devType == "Unknown": devType = ''
-		if deviceTypeName not in propsChangedList: devType = '' # Reset if not changed
-		serial = nodeProps.get(serialName, '')
-		if serial == "Unknown": serial = ''
-		if serialName not in propsChangedList: serial = '' # Reset if not changed
-		osFamily = ''
-		oslower = os.lower()
-		if "windows" in oslower: osFamily = "Windows"
-		elif "linux" in oslower: osFamily = "Linux"
-		elif "aix" in oslower or "unix" in oslower or "sun" in oslower: osFamily = "Unix"
-		elif "esx" in oslower: osFamily = "Proprietary"
-		print >>fserv, "%s,%s,%s,%s,,,,,,,,%s,,,%s,%s,%s,%s,%s,%s,,%s,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,%s,%s,,,,,,,,,,,,,,,,,,%s,,,,,,,,,,,%s,,,,,,,,,,,,,,,%s,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,%s," \
-								% (cmdbId,name,cls,company,cmdbIsMonitored,location, model, cmdbMonitorObj, cmdbTool, osFamily, os, serial, nodeDescByName[name],devType,fn, ipAddress,manufacturer,status)
+		generateLine(serverId, cols, fserv)
 	fserv.close
 
 if len(newClusterList) > 0:
@@ -755,36 +779,11 @@ if len(newClusterList) > 0:
 	fbustemplate = open("Cluster_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fbustemplate.close
 	for id in newClusterList:
-		name = nodesById.get(id)
-		nodeProps = allPropsById[id]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[id]
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		cmdbMonitorObj = nodeProps.get(monitorObName, '')
-		if monitorObName not in propsChangedList: cmdbMonitorObj = '' # Reset if not changed
-		cmdbTool = nodeProps.get(monitorToolName, '')	
-		if monitorToolName not in propsChangedList: cmdbTool = '' # Reset if not changed
-		criticality = nodeProps.get(criticalityName, '')
-		if criticalityName not in propsChangedList: criticality = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		opStatus = nodeProps.get(opStatusName, 'Live')
-		if opStatusName not in propsChangedList: opStatus = '' # Reset if not changed
-		serviceClass = nodeProps.get(serviceClassName, '')
-		if serviceClassName not in propsChangedList: serviceClass = '' # Reset if not changed
-		fn = nodeProps.get(fnName, '')
-		if fn == "Unknown": fn = ''
-		if fnName not in propsChangedList: fn = '' # Reset if not changed
-		devType = nodeProps.get(deviceTypeName, '')
-		if deviceTypeName not in propsChangedList: devType = '' # Reset if not changed
-		ipAddress = nodeProps.get(ipName, '')
-		if ipAddress == "Unknown": ipAddress = ''
-		if ipName not in propsChangedList: ipAddress = '' # Reset if not changed
-		print >>fbus, "%s,%s,%s,%s,,,,,,,,,,,,,,,,,,,,,,,,,%s,,,,,,%s,%s,,,,,,,,%s,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,%s" \
-								% (cmdbId, name, company, opStatus, criticality, nodeDescByName[name], devType, fn,status)
+		generateLine(id, cols, fbus)
 	fbus.close
 
 if len(newHWLBList) > 0:
@@ -792,44 +791,11 @@ if len(newHWLBList) > 0:
 	fbustemplate = open("HW_Load_Balancer_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fbustemplate.close
 	for id in newHWLBList:
-		name = nodesById.get(id)
-		nodeProps = allPropsById[id]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[id]
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		model = nodeProps.get(modelName, '')
-		if model == "Unknown": model = ''
-		if modelName not in propsChangedList: model = '' # Reset if not changed
-		manufacturer = nodeProps.get(manuName, '')
-		if manufacturer == "Unknown": manufacturer = ''
-		if manuName not in propsChangedList: manufacturer = '' # Reset if not changed
-		serial = nodeProps.get(serialName, '').strip()
-		if serial == "Unknown": serial = ''
-		if serialName not in propsChangedList: serial = '' # Reset if not changed
-		location = nodeProps.get(locationName, '')
-		if location == "Unknown": location = ''
-		if locationName not in propsChangedList: location = '' # Reset if not changed
-		criticality = nodeProps.get(criticalityName, '')
-		if criticalityName not in propsChangedList: criticality = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		opStatus = nodeProps.get(opStatusName, 'Live')
-		if opStatusName not in propsChangedList: opStatus = '' # Reset if not changed
-		serviceClass = nodeProps.get(serviceClassName, '')
-		if serviceClassName not in propsChangedList: serviceClass = '' # Reset if not changed
-		fn = nodeProps.get(fnName, '')
-		if fn == "Unknown": fn = ''
-		if fnName not in propsChangedList: fn = '' # Reset if not changed
-		devType = nodeProps.get(deviceTypeName, '')
-		if deviceTypeName not in propsChangedList: devType = '' # Reset if not changed
-		ipAddress = nodeProps.get(ipName, '')
-		if ipAddress == "Unknown": ipAddress = ''
-		if ipName not in propsChangedList: ipAddress = '' # Reset if not changed
-		print >>fbus, "%s,%s,%s,%s,,,,,,,,,,%s,,,%s,,%s,,,,,,,,,,,,,,,,,,,,,,,,,,,,,%s,%s,,,,,,,,,,,%s,,,,,,,,%s,,,,,,,,,,,,,,,,,,%s,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,%s" \
-								% (cmdbId, name, company, criticality, model, opStatus, serial, nodeDescByName[name], devType, fn,ipAddress, manufacturer,status)
+		generateLine(id, cols, fbus)
 	fbus.close
 
 if len(newSWLBList) > 0:
@@ -837,20 +803,11 @@ if len(newSWLBList) > 0:
 	fbustemplate = open("SW_Load_Balancer_Resource_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fbustemplate.close
 	for id in newSWLBList:
-		name = nodesById.get(id)
-		nodeProps = allPropsById[id]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[id]
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		opStatus = nodeProps.get(opStatusName, 'Live')
-		if opStatusName not in propsChangedList: opStatus = '' # Reset if not changed
-		cls = nodeProps.get(classPropName, '')
-		if classPropName not in propsChangedList: cls = '' # Reset if not changed
-		print >>fbus, "%s,%s,%s,,%s,,,,,,,,%s,,,,,,,%s,,,,,,,,,,,,%s" \
-								% (cmdbId, name, company, cls, nodeDescByName[name], status, opStatus)
+		generateLine(id, cols, fbus)
 	fbus.close
 
 if len(newBusServicesList) > 0:
@@ -858,22 +815,11 @@ if len(newBusServicesList) > 0:
 	fbustemplate = open("Service_Offering_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fbustemplate.close
 	for busId in newBusServicesList:
-		bus = nodesById.get(busId)
-		nodeProps = allPropsById[busId]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[busId]
-		criticality = nodeProps.get(criticalityName, '')
-		if criticalityName not in propsChangedList: criticality = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		opStatus = nodeProps.get(opStatusName, 'Live')
-		if opStatusName not in propsChangedList: opStatus = '' # Reset if not changed
-		serviceClass = nodeProps.get(serviceClassName, '')
-		if serviceClassName not in propsChangedList: serviceClass = '' # Reset if not changed
-		print >>fbus, "%s,%s,%s,,,,,,,,,,,,,,,,,,,%s,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,%s,,,,,%s" \
-								% (cmdbId, bus, company, criticality, serviceClass, status)
+		generateLine(busId, cols, fbus)
 	fbus.close
 
 if len(newDatabaseList) > 0:
@@ -881,27 +827,11 @@ if len(newDatabaseList) > 0:
 	fdbtemplate = open("Database_Instance_Import_Template.csv")
 	for t in fdbtemplate:
 		print >>fdb,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	for dbId in newDatabaseList:
-		db = nodesById.get(dbId)
-		nodeProps = allPropsById[dbId]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[dbId]
-		dbClass = nodeProps.get(classPropName, '')
-		if classPropName not in propsChangedList: dbClass = '' # Reset if not changed
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		cmdbMonitorObj = nodeProps.get(monitorObName, '')
-		if monitorObName not in propsChangedList: cmdbMonitorObj = '' # Reset if not changed
-		cmdbTool = nodeProps.get(monitorToolName, '')	
-		if monitorToolName not in propsChangedList: cmdbTool = '' # Reset if not changed
-		criticality = nodeProps.get(criticalityName, '')
-		if criticalityName not in propsChangedList: criticality = '' # Reset if not changed
-		installPath = nodeProps.get(installName, '')
-		if installName not in propsChangedList: installPath = '' # Reset if not changed
-		
-		print >>fdb, "%s,%s,%s,%s,%s,,,%s,,,,%s,%s,,,,,,,,,,,,,,,,,,,,,,,,,,%s,,,,,,,,,,,,,,,,\"%s\"," \
-											% (cmdbId, dbClass, db, company, criticality, cmdbIsMonitored, cmdbMonitorObj, cmdbTool, nodeDescByName[db], installPath)
+		generateLine(dbId, cols, fdb)
 	fdb.close
 
 # fdb = open("new-cmdb-databases.csv", "w")
@@ -929,18 +859,11 @@ if len(newContainerList) > 0:
 	ftemp = open("Storage_Container_Import_Template.csv")
 	for t in ftemp:
 		print >>fcont,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	ftemp.close
 	for id in newContainerList:
-		name = nodesById.get(id)
-		nodeProps = allPropsById[id]
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[id]
-		criticality = nodeProps.get(criticalityName, '')
-		if criticalityName not in propsChangedList: criticality = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		print >>fcont, "%s,%s,%s,%s,,,,,,,,,,,,,,,,,,,%s,,,,,,,,,,,,,,,,,,,,,,%s" \
-								% (cmdbId, company, name, criticality, nodeDescByName[name], status)
+		generateLine(id, cols, fcont)
 	fcont.close
 
 if len(newSanList) > 0:
@@ -948,39 +871,24 @@ if len(newSanList) > 0:
 	fdbtemplate = open("SAN_Import_Template.csv")
 	for t in fdbtemplate:
 		print >>fdb,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	for sanId in newSanList:
-		name = nodesById.get(sanId)
-		nodeProps = allPropsById[sanId]
-		cls = nodeProps.get(classPropName, '')
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[sanId]
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		model = nodeProps.get(modelName, '')
-		if model == "Unknown": model = ''
-		if modelName not in propsChangedList: model = '' # Reset if not changed
-		manufacturer = nodeProps.get(manuName, '')
-		if manufacturer == "Unknown": manufacturer = ''
-		if manuName not in propsChangedList: manufacturer = '' # Reset if not changed
-		serial = nodeProps.get(serialName, '').strip()
-		if serial == "Unknown": serial = ''
-		if serialName not in propsChangedList: serial = '' # Reset if not changed
-		location = nodeProps.get(locationName, '')
-		if location == "Unknown": location = ''
-		if locationName not in propsChangedList: location = '' # Reset if not changed
-		fn = nodeProps.get(fnName, '')
-		if fn == "Unknown": fn = ''
-		if fnName not in propsChangedList: fn = '' # Reset if not changed
-		devType = nodeProps.get(deviceTypeName, '')
-		if deviceTypeName not in propsChangedList: devType = '' # Reset if not changed
-		ipAddress = nodeProps.get(ipName, '')
-		if ipAddress == "Unknown": ipAddress = ''
-		if ipName not in propsChangedList: ipAddress = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		print >>fdb, "%s,%s,%s,,%s,,,,,,,%s,,,,,,,,,,,,,,,,,,,,,,%s,%s,,,,,,,%s,,,,,,,,,,,,%s,,,,,,,,,,,,,,,,%s,,%s" \
-								% (cmdbId,name,company,model, location, nodeDescByName[name], devType, fn, manufacturer, serial, status)
+		generateLine(sanId, cols, fdb)
+	fdb.close
+
+if len(newSanStorageSwList) > 0:
+	fdb = open("new-cmdb-storage-switch.csv", "w")
+	fdbtemplate = open("Storage_Switch_Import_Template.csv")
+	cols = list()
+	for t in fdbtemplate:
+		print >>fdb,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
+	fdbtemplate.close
+	for sanId in newSanStorageSwList:
+		generateLine(sanId, cols, fdb)
 	fdb.close
 
 if len(newSanFabricList) > 0:
@@ -988,39 +896,11 @@ if len(newSanFabricList) > 0:
 	fdbtemplate = open("SAN_Fabric_Import_Template.csv")
 	for t in fdbtemplate:
 		print >>fdb,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	for sanId in newSanFabricList:
-		name = nodesById.get(sanId)
-		nodeProps = allPropsById[sanId]
-		cls = nodeProps.get(classPropName, '')
-		cmdbId = nodeProps.get(cmdbIdName, '')
-		propsChangedList = propsChanged[sanId]
-		cmdbIsMonitored = nodeProps.get(isMonitoredName, "FALSE")
-		if isMonitoredName not in propsChangedList: cmdbIsMonitored = '' # Reset if not changed
-		model = nodeProps.get(modelName, '')
-		if model == "Unknown": model = ''
-		if modelName not in propsChangedList: model = '' # Reset if not changed
-		manufacturer = nodeProps.get(manuName, '')
-		if manufacturer == "Unknown": manufacturer = ''
-		if manuName not in propsChangedList: manufacturer = '' # Reset if not changed
-		serial = nodeProps.get(serialName, '').strip()
-		if serial == "Unknown": serial = ''
-		if serialName not in propsChangedList: serial = '' # Reset if not changed
-		location = nodeProps.get(locationName, '')
-		if location == "Unknown": location = ''
-		if locationName not in propsChangedList: location = '' # Reset if not changed
-		fn = nodeProps.get(fnName, '')
-		if fn == "Unknown": fn = ''
-		if fnName not in propsChangedList: fn = '' # Reset if not changed
-		devType = nodeProps.get(deviceTypeName, '')
-		if deviceTypeName not in propsChangedList: devType = '' # Reset if not changed
-		ipAddress = nodeProps.get(ipName, '')
-		if ipAddress == "Unknown": ipAddress = ''
-		if ipName not in propsChangedList: ipAddress = '' # Reset if not changed
-		status = nodeProps.get(statusName, '')
-		if statusName not in propsChangedList: status = '' # Reset if not changed
-		print >>fdb, "%s,%s,%s,,,,,,,,,,,,,,,,,,,,,%s,%s,,,,,,%s,,,,,,,,,,,,,%s,,%s,%s,,,%s,,,,,,,,,,,,,,,%s" \
-								% (cmdbId,name,company,nodeDescByName[name],devType,fn,location, manufacturer, model, status, serial, )
+		generateLine(sanId, cols, fdb)
 	fdb.close
 
 #Now update archie

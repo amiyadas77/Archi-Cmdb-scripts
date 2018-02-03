@@ -8,7 +8,9 @@ import sys
 import uuid
 
 allowedRels = dict() # Keyed by (classFrom, classTo, ArchieRelationship) value = (CMDB Rel, parent->child = True)
+cmdbToArchiRels = dict() # Keyed by (classFrom, classTo, CMDB Rel) value = (ArchieRelationship, parent->child = True)
 props = dict() #Keyed by (node id, property name)
+newProps = list() 
 nodesByName = dict() #Keyed by node name, id of node
 cmdbIdByName = dict() #Keyed by name, cmdb id of node
 nodesById = dict() # Keyed by node id, name of node
@@ -20,6 +22,7 @@ cmdbRelSet = set() #New/changed Set of dependencies (action, parent, relationshi
 allFullCmdbSet = set() #All CMDB relationships keyed by (parent, relationship, child, strength, outage)
 allShortCmdbSet = set() #All short CMDB relationships keyed by (parent, relationship, child)
 depends = dict() #Keyed by dependant (parent), set of (dependency (child), relationship, strength, outage)
+newArchiRels = set() # Set on new relationships to add to Archi
 
 missingFromCmdb = set() # Set of node names missing from CMDB
 missingRels = set() # Set of archie class relationships not in data model (i.e. rules csv file)
@@ -95,6 +98,7 @@ for line in frules:
 	type = fs[3].strip()
 	keepDirRel = fs[4].strip().lower() == 'true'
 	allowedRels[(srcRel, targetRel, archieRel)] = (type, keepDirRel)
+	cmdbToArchiRels[(srcRel, targetRel, type)] = (archieRel, keepDirRel)
 frules.close
 
 #Read in Archie nodes from exported file
@@ -279,13 +283,40 @@ for line in frels:
 frels.close
 
 #Check for deletes by checking each CMDB relationships is still in Archie - if not delete it.
-for relation in existingCmdbRels:
+for relation in existingCmdbRelsComplete:
 	#Test each relationship in the CMDB set and create deletion entries if no longer existing in Archie
-	if relation not in allShortCmdbSet:
+	parentId = relation[0]
+	childId = relation[2]
+	type = relation[1]
+	strength = relation[3]
+	outage = relation[4]
+	shortRel = (parentId, type, childId)
+	if shortRel not in allShortCmdbSet:
 		#Relationship deleted in archie - delete in CMDB
-		(strength, outage) = existingCmdbRels[relation]
+		#Or relationship needs to be created in Archie....you decide!
 		cmdbRelSet.add((deleteOperation, relation[0], relation[1], relation[2], strength, outage))
-	
+		print "Relationship %s to %s via %s is not in Archi - check that this is correct or whether relationship needs to be imported into Archi" \
+				% (nodesById[parentId], nodesById[childId], type)
+		#Retrieve Archi rule
+		srcClass = classByNode.get(parentId, 'NONE')
+		destClass = classByNode.get(childId, 'NONE')
+		#Retrieve equivalent Archi relationship type
+		(archRelType, keepDir) = cmdbToArchiRels.get((srcClass, destClass, type), ('NONE', False))
+		if archRelType == 'NONE': 
+			(archRelType, keepDir) = cmdbToArchiRels.get((destClass, srcClass, type), ('NONE', False))
+			if archRelType == 'NONE' or keepDir == True: 
+				print "Failed to find relationship for class %s to class %s via type %s, keep %s" % (srcClass, destClass, type, keepDir)
+				continue
+		id = str(uuid.uuid4())
+		if keepDir:
+			newArchiRels.add((parentId, archRelType, childId, "", id))
+		else:
+			newArchiRels.add((childId, archRelType, parentId, "", id))
+		if strength != "" and strength != "Always":
+			#Add strength and outage props
+			newProps.append((id, strengthPropStr, strength))
+			newProps.append((id, outagePropStr, outage))
+
 frels = open("cmdb-relations-changes.csv", "w")
 freadable = open("changed-readable-relations.csv", "w")
 freltemplate = open("cmdb-relations-template.csv")
@@ -338,6 +369,24 @@ for d in cmdbRelSet:
 		print >>frels, '%s,%s,,,,%s,%s,,,%s,%s,' % (action,archieIdtoCmdbId[parent],type,archieIdtoCmdbId[child],strength,outage)
 frels.close	
 freadable.close
+
+#Create Archi update - for relationships changed / added on CMDB 
+#Now update archie
+felems = open("new-elements.csv", "w")
+print >>felems,'"ID","Type","Name","Documentation"'
+felems.close
+
+frels = open("new-relations.csv", "w")
+print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
+for rel in newArchiRels:
+	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
+frels.close	
+
+fprops = open("new-properties.csv", "w")
+print >>fprops,'"ID","Key","Value"'
+for prop in newProps:
+	print >>fprops, '"%s","%s","%s"' % (prop[0], prop[1], prop[2])
+fprops.close
 
 fmiss = open("cmdb-missing.csv", "w")
 print >> fmiss,"Node name, Has Cmdb class?"

@@ -78,11 +78,12 @@ monitorObName = "CMDB Monitoring Object Id"
 monitorToolName = "CMDB Monitoring Tool"
 isMonitoredName	= "CMDB IsMonitored"
 domainName = "CMDB Domain DNS"
+assetTagName = "CMDB Asset Tag"
 
 propNameSet = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
 					locationName,criticalityName,serviceClassName, installName, \
 					statusName, serialName, opStatusName, domainName, \
-					monitorObName, monitorToolName, isMonitoredName}
+					monitorObName, monitorToolName, isMonitoredName, assetTagName}
 
 propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": deviceTypeName, \
 					osName: "OS Version", "Function Type": fnName, \
@@ -90,7 +91,12 @@ propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": de
 					"Location": locationName, "Criticality": criticalityName, "Service classification": serviceClassName, \
 					"Installed": installName, "Status": statusName, "Serial number": serialName, \
 					"Operational status": opStatusName, "DNS Domain": domainName, \
-					"Monitoring Object ID": monitorObName, "Monitoring Tool": monitorToolName, "Is Monitored": isMonitoredName }
+					"Monitoring Object ID": monitorObName, "Monitoring Tool": monitorToolName, "Is Monitored": isMonitoredName, \
+					"Asset tag": assetTagName}
+
+propRevLookup = dict()
+for p in propLookup:
+	propRevLookup[propLookup[p]] = p
 					
 computerClass = "Computer"
 printerClass = "Printer"
@@ -311,12 +317,14 @@ for lstr in fcmdb:
 		#Only take the name as the bit before the #
 	#	name = name.split('#')[0]
 	
-	cmdbId = fields[cols['Unique ID']]
-	classField = fields[cols['Class']]
-	status = fields[cols['Status']]
+	cmdbId = fields[cols[propRevLookup[cmdbIdName]]]
+	classField = fields[cols[propRevLookup[classPropName]]]
+	status = fields[cols[propRevLookup[statusName]]]
+	opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
 	#print cmdbId, classField, status, fields[cols['Updates']]
 	#opStatus = 
 	if status == "Retired": continue
+	#if opStatus == "Decommissioned": continue
 	cmdbClass = ''
 	if classField == "Computer" or classField == "Printer": continue
 	if classField == appClass: cmdbClass = appStr
@@ -350,35 +358,34 @@ for lstr in fcmdb:
 		print "WARNING: (Snow read 1) CMDB name %s: Unrecognised CMDB class field: %s - ignoring entry" % (name, classField)
 	if cmdbClass != '':
 		cmdb[name] = cmdbId
-		classField = fields[cols['Class']].strip()
-		status = fields[cols['Status']].strip()
-		deviceType = fields[cols['Device Type']].strip()
-		funType = fields[cols['Function Type']].strip()
-		ipAddr = fields[cols['IP Address']].strip()
-		subnet = ('0', '0', '0')
-		if ipAddr != '' : subnet = findSubnet(ipAddr)
-		location = fields[cols['Location']]
-		manufacturer = fields[cols['Manufacturer']].strip("(Manufacturer)").strip()
-		model = fields[cols['Model ID']].strip()
-		isMonitored = fields[cols['Is Monitored']].strip()
-		monitoringObject = fields[cols['Monitoring Object ID']].strip()
-		monitoringTool = fields[cols['Monitoring Tool']].strip()
-		opStatus = fields[cols['Operational status']].strip()
-		serial = fields[cols['Serial number']].strip()
 		cmdbProps[(cmdbId, classPropName)] = cmdbClass
-		if location != '': cmdbProps[(cmdbId, locationName)] = location
+		if status != '' : cmdbProps[(cmdbId, statusName)] = status
+		if opStatus != '' : cmdbProps[(cmdbId, opStatusName)] = opStatus
+		deviceType = fields[cols[propRevLookup[deviceTypeName]]].strip()
 		if deviceType != '': cmdbProps[(cmdbId, deviceTypeName)] = deviceType
+		funType = fields[cols[propRevLookup[fnName]]].strip()
 		if funType != '': cmdbProps[(cmdbId, fnName)] = funType
+		ipAddr = fields[cols[propRevLookup[ipName]]].strip()
 		if ipAddr != '': 
 			cmdbProps[(cmdbId, ipName)] = ipAddr
+			subnet = ('0', '0', '0')
+			subnet = findSubnet(ipAddr)
+		location = fields[cols[propRevLookup[locationName]]]
+		if location != '': cmdbProps[(cmdbId, locationName)] = location
+		manufacturer = fields[cols[propRevLookup[manuName]]].strip("(Manufacturer)").strip()
 		if manufacturer != '' : cmdbProps[(cmdbId, manuName)] = manufacturer
+		model = fields[cols[propRevLookup[modelName]]].strip()
 		if model != '' : cmdbProps[(cmdbId, modelName)] = model
-		if serial != '' : cmdbProps[(cmdbId, serialName)] = serial
-		if status != '' : cmdbProps[(cmdbId, statusName)] = status
+		isMonitored = fields[cols[propRevLookup[isMonitoredName]]].strip()
 		if isMonitored != '' : cmdbProps[(cmdbId, isMonitoredName)] = isMonitored
+		monitoringObject = fields[cols[propRevLookup[monitorObName]]].strip()
 		if monitoringObject != '' : cmdbProps[(cmdbId, monitorObName)] = monitoringObject
+		monitoringTool = fields[cols[propRevLookup[monitorToolName]]].strip()
 		if monitoringTool != '' : cmdbProps[(cmdbId, monitorToolName)] = monitoringTool
-		if opStatus != '' : cmdbProps[(cmdbId, opStatusName)] = opStatus
+		serial = fields[cols[propRevLookup[serialName]]].strip()
+		if serial != '' : cmdbProps[(cmdbId, serialName)] = serial
+		assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
+		if assetTag != '' : cmdbProps[(cmdbId, assetTagName)] = assetTag
 
 fcmdb.close
 
@@ -436,8 +443,8 @@ for lstr in fnodes:
 		cmdbId = cmdb[lowerName]
 		for propName in propNameSet:
 			archieVal = existingProps.get((id, propName), '').strip()
-			cmdbVal = cmdbProps.get((cmdbId, propName))
-			if cmdbVal != None and archieVal != '' and archieVal != 'Unknown' and cmdbVal.strip() != archieVal:
+			cmdbVal = cmdbProps.get((cmdbId, propName), '')
+			if archieVal != '' and archieVal != 'Unknown' and cmdbVal.strip() != archieVal:
 				print "%s has a changed property: %s (Archi = %s, CMDB = %s" % (name, propName, archieVal, cmdbVal)
 				propsChanged[id].add(propName)
 	else:
@@ -566,7 +573,7 @@ for lstr in fcmdb:
 	fullStr = ''
 	fields = csv.reader(csvList, delimiter=',', quotechar = '"').next()
 	#fields = fullStr.rstrip('\n\r').split(",")
-	cmdbId = fields[cols['Unique ID']].strip()
+	cmdbId = fields[cols[propRevLookup[cmdbIdName]]].strip()
 	if cmdbId == '':
 		print "Ignoring empty or blank row (no cmdb Id)"
 		continue
@@ -577,25 +584,28 @@ for lstr in fcmdb:
 		# firstName = lowerName.split(".")[0]
 	# else:
 		# firstName = lowerName
-	classField = fields[cols['Class']].strip()
-	status = fields[cols['Status']].strip()
-	deviceType = fields[cols['Device Type']].strip()
-	funType = fields[cols['Function Type']].strip()
-	ipAddr = fields[cols['IP Address']].strip()
+	classField = fields[cols[propRevLookup[classPropName]]].strip()
+	status = fields[cols[propRevLookup[statusName]]].strip()
+	deviceType = fields[cols[propRevLookup[deviceTypeName]]].strip()
+	funType = fields[cols[propRevLookup[fnName]]].strip()
+	ipAddr = fields[cols[propRevLookup[ipName]]].strip()
 	#print cmdbId, name, classField, status, fields[cols['Updates']]
 	subnet = ('0', '0', '0')
 	if ipAddr != '' : subnet = findSubnet(ipAddr)
-	location = fields[cols['Location']]
-	manufacturer = fields[cols['Manufacturer']].strip("(Manufacturer)").strip()
-	model = fields[cols['Model number']].strip()
-	isMonitored = fields[cols['Is Monitored']].strip()
-	monitoringObject = fields[cols['Monitoring Object ID']].strip()
-	monitoringTool = fields[cols['Monitoring Tool']].strip()
-	opStatus = fields[cols['Operational status']].strip()
-	serial = fields[cols['Serial number']].strip()
+	location = fields[cols[propRevLookup[locationName]]]
+	manufacturer = fields[cols[propRevLookup[manuName]]].strip("(Manufacturer)").strip()
+	model = fields[cols[propRevLookup[modelName]]].strip()
+	isMonitored = fields[cols[propRevLookup[isMonitoredName]]].strip()
+	monitoringObject = fields[cols[propRevLookup[monitorObName]]].strip()
+	monitoringTool = fields[cols[propRevLookup[monitorToolName]]].strip()
+	opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
+	serial = fields[cols[propRevLookup[serialName]]].strip()
+	assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
+	
 	#skip dev/test / retired / EUC
 	if classField == computerClass or classField == printerClass : continue #Ignore all EUC devices
 	if status == "Retired": continue
+	#if opStatus == "Decommissioned": continue
 	if "#DECOM" in name: continue
 	#if classField == appClass: continue #lots of system sofware in the CMDB, not just apps
 
@@ -689,6 +699,9 @@ for lstr in fcmdb:
 		val = existingProps.get((nodeId, opStatusName), '')
 		if opStatus != '' and opStatus != val:
 			props[(nodeId, opStatusName)] = opStatus
+		val = existingProps.get((nodeId, assetTagName), '')
+		if assetTag != '' and assetTag != val:
+			props[(nodeId, assetTagName)] = assetTag
 	else :
 		#if name.startswith("NIE-CTX") : continue #Cytrix nodes are wrong currently
 		if status == "Retired" or status == "Absent" : continue
@@ -748,6 +761,7 @@ for lstr in fcmdb:
 		if monitoringObject != '' : props[(nodeId, monitorObName)] = monitoringObject
 		if monitoringTool != '' : props[(nodeId, monitorToolName)] = monitoringTool
 		if opStatus != '' : props[(nodeId, opStatusName)] = opStatus
+		if assetTag != '' : props[(nodeId, assetTagName)] = assetTag
 fcmdb.close
 
 if len(newAppsList) > 0:

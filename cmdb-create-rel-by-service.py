@@ -7,6 +7,7 @@
 
 import sys
 import uuid
+import csv
 
 rels = dict()
 props = dict() #Keyed by (node id, property name)
@@ -36,6 +37,7 @@ rackList = list() # list of racks
 hwlbList = list() # list of HW loadbalancers
 swlbList = list() # list of SW loadbalancers
 
+cmdbIdName = "CMDB ID"
 classPropStr = "CMDB Class"
 osName = "CMDB Operating System"
 strengthPropStr = "CMDB-REL Strength"
@@ -45,6 +47,16 @@ osName = "CMDB Operating System"
 fnName = "CMDB Function"
 ipName = "CMDB IP Address"
 statusName = "CMDB Status"
+
+propNameSet = {cmdbIdName, classPropStr, deviceTypeName, osName, fnName, ipName, statusName}
+
+propLookup = {"Unique ID": cmdbIdName, "Class": classPropStr, "Device Type": deviceTypeName, \
+					osName: "OS Version", "Function Type": fnName, \
+					"IP Address": ipName, "Status": statusName}
+
+propRevLookup = dict()
+for p in propLookup:
+	propRevLookup[propLookup[p]] = p
 
 alwaysStr = "Always"
 clusterStr = "Cluster"
@@ -127,6 +139,7 @@ clusterOfStr = "Cluster of::Cluster"
 ipConnectionStr = "IP Connection::IP Connection"
 storageStr = "Provides storage for::Stored on"
 
+
 #Add dependencies for passed in id, recursing down the tree - each dependency keyed by dependant, set of (dependency, outage, relationship)
 def addDepend(id, subId):
 	#print "app id: %s - dependent id %s\n" % (id, subId)
@@ -150,6 +163,21 @@ def addDepend(id, subId):
 			#print "I,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
 			cmdbRelSet.add((id, dependency[2], dependency[0], infreqStr, dependency[1]))
 			addDepend(id, dependency[0])
+
+			#Process header line and return a dict keyed by column name, with value of field number	
+def processHeader(headerLine):
+	cols = headerLine.strip('\n\r').split(',')
+	colDict = dict()
+	num = 0;
+	for col in cols:
+		colDict[col.strip()] = num
+		num += 1
+	return colDict
+
+#Process header line and return a of each header	
+def getPropList(headerLine):
+	cols = headerLine.strip('\n\r').split(',')
+	return cols
 
 #Read in Archie nodes from exported file
 fnodes = open("elements.csv", "r")
@@ -211,13 +239,36 @@ fprops.close
 #Store all cmdbIds by name
 fcmdb = open("SNOW CMDB.csv")
 count = 0
-for line in fcmdb:
+fullStr = ""
+prevStr = False
+cols = dict()
+for lstr in fcmdb:
 	count += 1
-	if count == 1: continue
-	fields=line.rstrip("\n\r").split(",")
-	cmdbId = fields[0]
-	name = fields[1].lower()
-	status = fields[5]
+	if count == 1:
+		cols = processHeader(lstr)
+		continue
+	if lstr.count('"') % 2 == 1:
+		#Multi-line entry
+		fullStr += lstr
+		if not prevStr: #First line (else last)
+			prevStr = True
+			continue
+	elif prevStr:
+		#Continuing line 
+		fullStr += lstr
+		continue
+	else : #Not multi-line
+		fullStr = lstr
+	prevStr = False
+	csvList = list()
+	csvList.append(fullStr)
+	fields = csv.reader(csvList, delimiter=',', quotechar = '"').next()
+	#fields = fullStr.rstrip('\n\r').split(",")
+	#print fields[0], fields[1], fields[2], fields[3]
+	fullStr = ''
+	cmdbId = fields[cols[propRevLookup[cmdbIdName]]]
+	name = fields[cols["Name"]].lower()
+	status = fields[cols[propRevLookup[statusName]]]
 	if status == "Retired": continue
 	if name in nodesByName:
 		nodeId = nodesByName[name]

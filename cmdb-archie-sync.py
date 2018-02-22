@@ -90,7 +90,7 @@ propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": de
 					osName: "OS Version", "Function Type": fnName, \
 					"IP Address": ipName,  "Manufacturer": manuName, "Model ID": modelName, \
 					"Location": locationName, "Criticality": criticalityName, "Service classification": serviceClassName, \
-					"Installed": installName, "Status": statusName, "Serial number": serialName, \
+					"Installation Path": installName, "Status": statusName, "Serial number": serialName, \
 					"Operational status": opStatusName, "DNS Domain": domainName, \
 					"Monitoring Object ID": monitorObName, "Monitoring Tool": monitorToolName, "Is Monitored": isMonitoredName, \
 					"Asset tag": assetTagName}
@@ -204,14 +204,15 @@ def generateLine(id, columnList, outFile):
 	nodeProps = allPropsById[id]
 	propsChangedSet = propsChanged.get(id, set())
 	propsChangedSet.add(cmdbIdName) #ID always changed
+	out = ''
+	isNewToCmdb = name.lower() not in cmdb
+	changed = isNewToCmdb #If new to CMDB then set Changed to true to ensure output line written
+	count = 0
 	#Iterate over the template file header cols. For each column, check if we have property set
 	#If property set and it has changed, add it in otherwise write a blank value
-	out = ''
-	changedCount = False
-	changed = False
-	count = 0
 	for col in columnList:
-		if col == "Name": val = name
+		if col == "Name": 
+			val = name
 		else:
 			propName = propLookup.get(col, '')
 			if propName not in propsChangedSet: val = ''
@@ -223,10 +224,10 @@ def generateLine(id, columnList, outFile):
 		if count == 0: out = "%s" % val
 		else: out = "%s,%s" % (out, val)
 		count += 1
+	#print out, changed
 	if changed:	
 		print >>outFile, out
-		changedCount += 1
-	return changedCount
+	return changed
 	
 #Read in existing relationships
 frels = open("relations.csv")
@@ -453,9 +454,11 @@ for lstr in fnodes:
 				print "%s has a changed property: %s (Archi = %s, CMDB = %s" % (name, propName, archieVal, cmdbVal)
 				propsChanged[id].add(propName)
 	else:
-		propsChanged[id] = propNameSet  #set all properties on new CI
-	if lowerName not in cmdb or len(propsChanged[id]) > 0: #Generate new or changed things
-		#Add to the correct new CI list
+		#set all properties on new CI
+		propsChanged[id] = propNameSet  
+	if lowerName not in cmdb or len(propsChanged[id]) > 0: 
+		#Generate new or changed things
+		#by adding to the correct new CI list
 		if id in appsList: newAppsList.append(id)
 		elif id in serverList: newServerList.append(id)
 		elif id in vmList: newServerList.append(id)
@@ -779,7 +782,7 @@ if len(newAppsList) > 0:
 		if len(cols) > 0: break #Got header
 	fapptemplate.close
 	entries = 0
-	for appId in newAppsList:
+	for id in newAppsList:
 		if generateLine(id, cols, fapp): entries += 1
 	fapp.close
 	if entries == 0: os.remove(outFile)
@@ -795,7 +798,7 @@ if len(newServerList) > 0:
 		if len(cols) > 0: break #Got header
 	fservtemplate.close
 	entries = 0
-	for serverId in newServerList:
+	for id in newServerList:
 		if generateLine(id, cols, fserv): entries += 1
 	fserv.close
 	if entries == 0: os.remove(outFile)
@@ -812,6 +815,7 @@ if len(newClusterList) > 0:
 	fbustemplate.close
 	entries = 0
 	for id in newClusterList:
+		print id
 		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
 	if entries == 0: os.remove(outFile)
@@ -859,7 +863,7 @@ if len(newBusServicesList) > 0:
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fbustemplate.close
-	for busId in newBusServicesList:
+	for id in newBusServicesList:
 		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
 	if entries == 0: os.remove(outFile)
@@ -875,7 +879,7 @@ if len(newDatabaseList) > 0:
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
-	for dbId in newDatabaseList:
+	for id in newDatabaseList:
 		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
 	if entries == 0: os.remove(outFile)
@@ -927,7 +931,7 @@ if len(newSanList) > 0:
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	entries = 0
-	for sanId in newSanList:
+	for id in newSanList:
 		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
 	if entries == 0: os.remove(outFile)
@@ -944,7 +948,7 @@ if len(newSanStorageSwList) > 0:
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	entries = 0
-	for sanId in newSanStorageSwList:
+	for id in newSanStorageSwList:
 		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
 	if entries == 0: os.remove(outFile)
@@ -960,7 +964,7 @@ if len(newSanFabricList) > 0:
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	entries = 0
-	for sanId in newSanFabricList:
+	for id in newSanFabricList:
 		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
 	if entries == 0: os.remove(outFile)

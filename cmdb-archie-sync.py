@@ -5,6 +5,7 @@
 import sys
 import uuid
 import csv
+import os
 
 #nodesByName = dict() #Keyed by node name, id of node
 nodesById = dict() # Keyed by node id, name of node
@@ -206,6 +207,7 @@ def generateLine(id, columnList, outFile):
 	#Iterate over the template file header cols. For each column, check if we have property set
 	#If property set and it has changed, add it in otherwise write a blank value
 	out = ''
+	changedCount = False
 	changed = False
 	count = 0
 	for col in columnList:
@@ -221,7 +223,10 @@ def generateLine(id, columnList, outFile):
 		if count == 0: out = "%s" % val
 		else: out = "%s,%s" % (out, val)
 		count += 1
-	if changed:	print >>outFile, out
+	if changed:	
+		print >>outFile, out
+		changedCount += 1
+	return changedCount
 	
 #Read in existing relationships
 frels = open("relations.csv")
@@ -765,88 +770,116 @@ for lstr in fcmdb:
 fcmdb.close
 
 if len(newAppsList) > 0:
-	fapp = open("new-cmdb-apps.csv", "w")
+	outFile = "new-cmdb-apps.csv"
+	fapp = open(outFile, "w")
 	fapptemplate = open("Application_Import_Template.csv")
 	for t in fapptemplate:
 		print >>fapp,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fapptemplate.close
+	entries = 0
 	for appId in newAppsList:
-		generateLine(appId, cols, fapp)
+		if generateLine(id, cols, fapp): entries += 1
 	fapp.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d Application entries" % entries
 
 if len(newServerList) > 0:
-	fserv = open("new-cmdb-servers.csv", "w")
+	outFile = "new-cmdb-servers.csv"
+	fserv = open(outFile, "w")
 	fservtemplate = open("Server_Import_template.csv")
 	for t in fservtemplate:
 		print >>fserv,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fservtemplate.close
+	entries = 0
 	for serverId in newServerList:
-		generateLine(serverId, cols, fserv)
+		if generateLine(id, cols, fserv): entries += 1
 	fserv.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d Server entries" % entries
 
 if len(newClusterList) > 0:
-	fbus = open("new-cmdb-cluster.csv", "w")
+	outFile = "new-cmdb-cluster.csv"
+	fbus = open(outFile, "w")
 	fbustemplate = open("Cluster_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fbustemplate.close
+	entries = 0
 	for id in newClusterList:
-		generateLine(id, cols, fbus)
+		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d cluster entries" % entries
 
 if len(newHWLBList) > 0:
-	fbus = open("new-cmdb-hw-loadbalancers.csv", "w")
+	outFile = "new-cmdb-hw-loadbalancers.csv"
+	fbus = open(outFile, "w")
 	fbustemplate = open("HW_Load_Balancer_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fbustemplate.close
+	entries = 0
 	for id in newHWLBList:
-		generateLine(id, cols, fbus)
+		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d HW loadbalancers entries" % entries
 
 if len(newSWLBList) > 0:
-	fbus = open("new-cmdb-sw-loadbalancers.csv", "w")
+	outFile = "new-cmdb-sw-loadbalancers.csv"
+	fbus = open(outFile, "w")
 	fbustemplate = open("SW_Load_Balancer_Resource_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fbustemplate.close
+	entries = 0
 	for id in newSWLBList:
-		generateLine(id, cols, fbus)
+		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d SW loadbalancers entries" % entries
 
 if len(newBusServicesList) > 0:
-	fbus = open("new-cmdb-service_offering.csv", "w")
+	outFile = "new-cmdb-service_offering.csv"
+	fbus = open(outFile, "w")
 	fbustemplate = open("Service_Offering_Import_Template.csv")
+	entries = 0
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fbustemplate.close
 	for busId in newBusServicesList:
-		generateLine(busId, cols, fbus)
+		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d Business Service Offering entries" % entries
 
 if len(newDatabaseList) > 0:
-	fdb = open("new-cmdb-databases.csv", "w")
+	outFile = "new-cmdb-databases.csv"
+	fdb = open(outFile, "w")
 	fdbtemplate = open("Database_Instance_Import_Template.csv")
+	entries = 0
 	for t in fdbtemplate:
 		print >>fdb,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
 	for dbId in newDatabaseList:
-		generateLine(dbId, cols, fdb)
+		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d Database entries" % entries
 
 # fdb = open("new-cmdb-databases.csv", "w")
 # fdbtemplate = open("Database_Import_Template.csv")
@@ -869,31 +902,40 @@ if len(newDatabaseList) > 0:
 # fdb.close
 
 if len(newContainerList) > 0:
-	fcont = open("new-cmdb-containers.csv", "w")
+	outFile = "new-cmdb-containers.csv"
+	fcont = open(outFile, "w")
 	ftemp = open("Storage_Container_Import_Template.csv")
 	for t in ftemp:
 		print >>fcont,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	ftemp.close
+	entries = 0
 	for id in newContainerList:
-		generateLine(id, cols, fcont)
+		if generateLine(id, cols, fcont): entries += 1
 	fcont.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d Container entries" % entries
 
 if len(newSanList) > 0:
-	fdb = open("new-cmdb-san.csv", "w")
+	outFile = "new-cmdb-san.csv"
+	fdb = open(outFile, "w")
 	fdbtemplate = open("SAN_Import_Template.csv")
 	for t in fdbtemplate:
 		print >>fdb,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
+	entries = 0
 	for sanId in newSanList:
-		generateLine(sanId, cols, fdb)
+		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d SAN entries" % entries
 
 if len(newSanStorageSwList) > 0:
-	fdb = open("new-cmdb-storage-switch.csv", "w")
+	outFile = "new-cmdb-storage-switch.csv"
+	fdb = open(outFile, "w")
 	fdbtemplate = open("Storage_Switch_Import_Template.csv")
 	cols = list()
 	for t in fdbtemplate:
@@ -901,21 +943,28 @@ if len(newSanStorageSwList) > 0:
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
+	entries = 0
 	for sanId in newSanStorageSwList:
-		generateLine(sanId, cols, fdb)
+		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d SAN Storage entries" % entries
 
 if len(newSanFabricList) > 0:
-	fdb = open("new-cmdb-sanfabric.csv", "w")
+	outFile = "new-cmdb-sanfabric.csv"
+	fdb = open(outFile, "w")
 	fdbtemplate = open("SAN_Fabric_Import_Template.csv")
 	for t in fdbtemplate:
 		print >>fdb,t
 		cols = getPropList(t)
 		if len(cols) > 0: break #Got header
 	fdbtemplate.close
+	entries = 0
 	for sanId in newSanFabricList:
-		generateLine(sanId, cols, fdb)
+		if generateLine(id, cols, fdb): entries += 1
 	fdb.close
+	if entries == 0: os.remove(outFile)
+	else: print "%d SAN Fabric entries" % entries
 
 #Now update archie
 felems = open("new-elements.csv", "w")

@@ -6,14 +6,11 @@
 
 import sys
 import uuid
+import csv
+from cmdbconstants import *
 
 allowedRels = dict() # Keyed by (classFrom, classTo, ArchieRelationship) value = (CMDB Rel, parent->child = True)
 cmdbToArchiRels = dict() # Keyed by (classFrom, classTo, CMDB Rel) value = (ArchieRelationship, parent->child = True)
-props = dict() #Keyed by (node id, property name)
-newProps = list() 
-nodesByName = dict() #Keyed by node name, id of node
-cmdbIdByName = dict() #Keyed by name, cmdb id of node
-nodesById = dict() # Keyed by node id, name of node
 classByNode = dict() # Keyed by node id, the Cmdb class of the node
 archieIdtoCmdbId = dict() #keyed by Archie node id, cmdb id
 existingCmdbRels = dict() #Dependencies keyed by tuple (parent, relationship, child) with value of (strength, outage)
@@ -26,31 +23,6 @@ newArchiRels = set() # Set on new relationships to add to Archi
 
 missingFromCmdb = set() # Set of node names missing from CMDB
 missingRels = set() # Set of archie class relationships not in data model (i.e. rules csv file)
-
-classPropStr = "CMDB Class"
-cmdbIdStr = "CMDB ID"
-
-osName = "CMDB Operating System"
-strengthPropStr = "CMDB-REL Strength"
-outagePropStr = "CMDB-REL Outage"
-deviceTypeName = "CMDB Device Type"
-osName = "CMDB Operating System"
-fnName = "CMDB Function"
-ipName = "CMDB IP Address"
-statusName = "CMDB Status"
-
-alwaysStr = "Always"
-clusterRelStr = "Cluster"
-occStr = "Occasional"
-infreqStr = "Infrequent"
-
-company = "NIE Networks"
-
-createOperation = "create"
-updateOperation = "update"
-deleteOperation = "delete"
-
-passThruStr = "PASS-THRU"
 
 #Add dependencies for passed in id, recursing down the tree - each dependency keyed by dependant, set of (dependency, outage, relationship)
 def addDepend(id, subId, inType):  #Note: Id = Super parent, subId = add all subIds as children
@@ -83,6 +55,8 @@ def addDepend(id, subId, inType):  #Note: Id = Super parent, subId = add all sub
 				elif newRel not in existingCmdbRelsComplete:
 					#Update to strength / outage, rather than create
 					cmdbRelSet.add((updateOperation, newRel[0], newRel[1], newRel[2], newRel[3], newRel[4]))
+
+					#Process header line and return a dict keyed by column name, with value of field number	
 
 #Read in allowed relationships rules
 #(classFrom, classTo, ArchieRelationship) value = (CMDB Rel, parent->child = True)
@@ -135,34 +109,124 @@ for line in fprops:
 		if name == classPropStr: classByNode[id] = val
 		if name == cmdbIdStr: 
 			archieIdtoCmdbId[id] = val
-			cmdbIdByName[nodesById[id]] = val
 		
 		lstr = ""
 fprops.close
+
+#Read in CMDBs to check status
+fcmdb = open("SNOW CMDB.csv")
+count = 0
+fullStr = ""
+prevStr = False
+cols = dict()
+for lstr in fcmdb:
+	count += 1
+	if count == 1:
+		cols = processHeader(lstr)
+		continue
+	if lstr.count('"') % 2 == 1:
+		#Multi-line entry
+		fullStr += lstr
+		if not prevStr: #First line (else last)
+			prevStr = True
+			continue
+	elif prevStr:
+		#Continuing line 
+		fullStr += lstr
+		continue
+	else : #Not multi-line
+		fullStr = lstr
+	prevStr = False
+	csvList = list()
+	csvList.append(fullStr)
+	fields = csv.reader(csvList, delimiter=',', quotechar = '"').next()
+	#fields = fullStr.rstrip('\n\r').split(",")
+	#print fields[0], fields[1], fields[2], fields[3]
+	fullStr = ''
+	name = fields[1].lower()
+	#if '#' in name: 
+		#Names with this have been decommissioned, but not really in some cases
+		#Only take the name as the bit before the #
+	#	name = name.split('#')[0]
+	
+	cmdbId = fields[cols[propRevLookup[cmdbIdName]]]
+	classField = fields[cols[propRevLookup[classPropName]]]
+	status = fields[cols[propRevLookup[statusName]]]
+	opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
+	#print cmdbId, classField, status]
+	cmdbClass = ''
+	if classField == "Computer" or classField == "Printer": continue
+	if classField == appClass: cmdbClass = appStr
+	elif classField == busServiceClass: cmdbClass = businessStr
+	elif classField == busOfferingClass: cmdbClass = busOfferStr
+	elif classField == serverClass: cmdbClass = serverStr
+	elif classField == esxServerClass: cmdbClass = esxServerStr
+	elif classField == aixServerClass: cmdbClass = aixServerStr
+	elif classField == dbClass: cmdbClass = dbStr
+	elif classField == dbInstClass: cmdbClass = dbInstStr
+	elif classField == dbOraClass: cmdbClass = dbOraStr
+	elif classField == dbSQLClass: cmdbClass = dbSqlStr
+	elif classField == linuxClass: cmdbClass = linuxStr
+	elif classField == solarisClass: cmdbClass = solarisStr
+	elif classField == netClass: cmdbClass = netStr
+	elif classField == winClass: cmdbClass = winStr
+	elif classField == storageServerClass: cmdbClass = storageServerStr
+	elif classField == storageDevClass: cmdbClass = storageDevStr
+	elif classField == sanSwitchClass: cmdbClass = sanSwitchStr
+	elif classField == sanFabricClass: cmdbClass = sanFabricStr
+	elif classField == sanClass: cmdbClass = sanStr
+	elif classField == containerClass: cmdbClass = containerStr
+	elif classField == vmwareClass: cmdbClass = vmwareStr
+	elif classField == vmClass: cmdbClass = vmStr
+	elif classField == vcenterClass: cmdbClass = vcenterStr
+	elif classField == clusterClass: cmdbClass = clusterStr
+	elif classField == rackClass: cmdbClass = rackStr
+	elif classField == lbhwClass: cmdbClass = lbhwStr
+	elif classField == lbswClass: cmdbClass = lbswStr
+	elif classField == fwClass: cmdbClass = fwStr
+	else : 
+		print "WARNING: (Snow read 1) CMDB name %s: Unrecognised CMDB class field: %s - ignoring entry" % (name, classField)
+	if cmdbClass != '':
+		cmdb[name] = cmdbId
+		cmdbProps[(cmdbId, classPropName)] = cmdbClass
+		if status != '' : cmdbProps[(cmdbId, statusName)] = status
+		if opStatus != '' : cmdbProps[(cmdbId, opStatusName)] = opStatus
+
+fcmdb.close
 
 #Read in existing CMDB relationships
 fcmdb = open("CMDB relations.csv")
 count = 0
 for line in fcmdb:
 	count += 1
-	if count == 1: continue
+	if count == 1:
+		cols = processHeader(line)
+		continue
 	skip = False
 	fs = line.rstrip('\n\r').split(",")
-	parent = fs[1].strip('"')
-	if len(fs) != 7:
-		print "Warning: Import file has a row (parent name = %s) of the incorrect length: %d" % (parent, len(fs))
+	parent = fs[cols[parentName]].strip('"')
+	if len(fs) < 7:
+		print "Warning: Import file has a row (parent name = %s) that is too small: %d" % (parent, len(fs))
 		skip = True
 	parentId = nodesByName.get(parent.lower())
-	type = fs[2].strip('"').strip()
-	child = fs[4].strip('"').strip().lower()
+	type = fs[cols[typeName]].strip('"').strip()
+	child = fs[cols[childName]].strip('"').strip().lower()
 	childId = nodesByName.get(child.lower())
-	strength = fs[5].strip()
-	outage = fs[6].strip()
+	strength = fs[cols[strengthName]].strip()
+	outage = fs[cols[outageName]].strip()
 	if parentId == None:
-		print "Warning: CMDB CI %s not found in Archie - run sync on new CI extract" % parent
+		cmdbId = cmdb[parent.lower()]
+		cmdbStatus = cmdbProps.get((cmdbId, statusName), '').strip()
+		cmdbRetired = cmdbStatus == "Retired" or cmdbStatus == "Absent" or cmdbStatus == "Disposed"
+		if not cmdbRetired:
+			print "Warning: CMDB CI %s not found in Archie - run sync on new CI extract" % parent
 		skip = True
 	if childId == None:
-		print "Warning: CMDB CI %s not in Archie - run sync on new CI extract" % child
+		cmdbId = cmdb[child.lower()]
+		cmdbStatus = cmdbProps.get((cmdbId, statusName), '').strip()
+		cmdbRetired = cmdbStatus == "Retired" or cmdbStatus == "Absent" or cmdbStatus == "Disposed"
+		if not cmdbRetired:
+			print "Warning: CMDB CI %s not in Archie - run sync on new CI extract" % child
 		skip = True
 	if not skip:
 		rel = (parentId, type, childId, strength, outage)
@@ -362,11 +426,10 @@ for d in cmdbRelSet:
 	if child not in archieIdtoCmdbId:
 		missingFromCmdb.add((nodesById[child],(child, classPropStr) in props))
 		childMissing = True
-	#print >>freadable, '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (nodesById[parent],parentClass, nodesById[child],childClass,childOs,osFamily,devType,fn,ipAddress, d[1],d[3],d[4])
-	print >>freadable, '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (action, nodesById[parent],parentClass, nodesById[child],childClass, type,strength,outage, parentMissing, childMissing)
 	#Use the following for actual export to CMDB
 	if not childMissing and not parentMissing:
 		print >>frels, '%s,%s,,,,%s,%s,,,%s,%s,' % (action,archieIdtoCmdbId[parent],type,archieIdtoCmdbId[child],strength,outage)
+		print >>freadable, '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (action, nodesById[parent],parentClass, nodesById[child],childClass, type,strength,outage, parentMissing, childMissing)
 frels.close	
 freadable.close
 
@@ -377,9 +440,12 @@ print >>felems,'"ID","Type","Name","Documentation"'
 felems.close
 
 frels = open("new-relations.csv", "w")
+freadable = open("new-relations-readable.csv", "w")
 print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
+print >>freadable,'"Parent","Child","Relationship"'
 for rel in newArchiRels:
 	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
+	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
 frels.close	
 
 fprops = open("new-properties.csv", "w")

@@ -6,12 +6,8 @@ import sys
 import uuid
 import csv
 import os
+from cmdbconstants import *
 
-#nodesByName = dict() #Keyed by node name, id of node
-nodesById = dict() # Keyed by node id, name of node
-nodes = dict() #id keyed by name
-cmdb = dict() #Keyed by Name, the cmdb class
-props = dict() #New props, keyed by node id + property name
 propsChanged = dict() #Keyed by id, set of all properties that have changed
 allPropsById = dict() #dict of dict of all properties found for a particular element keyed by its id  and the prop name
 rels=list() #List of tuples (parent, type, child, name)
@@ -19,7 +15,6 @@ netrels=list() #List of tuples (parent, type, child, name)
 existingRels = dict() #Key = (parent, type, child), val = rel id
 existingProps = dict() #Keyed by node id + property name
 nodeDescByName = dict() #dict of node descriptions keyed by name
-cmdbProps = dict() #CMDB props from CMDB file, keyed by cmdb id + property name
 
 appsList = list() # list of application ids
 serverList = list() # list of server ids
@@ -36,6 +31,7 @@ clusterList = list() # list of clusters
 rackList = list() # list of racks
 hwlbList = list() # list of HW loadbalancers
 swlbList = list() # list of SW loadbalancers
+netgearList = list() # list of network devices
 
 newAppsList = list()
 newServerList = list()
@@ -49,6 +45,7 @@ newContainerList = list()
 newClusterList = list()
 newHWLBList = list()
 newSWLBList = list()
+newNetGearList = list()
 
 nodesFirstName = dict() #id keyed by nodes first word
 hosts = dict()
@@ -59,109 +56,6 @@ lpars = dict()
 nets = dict()
 buss = dict()
 subnets = list()
-
-cmdbIdName = "CMDB ID"
-classPropName = "CMDB Class"
-deviceTypeName = "CMDB Device Type"
-osName = "CMDB Operating System"
-fnName = "CMDB Function"
-ipName = "CMDB IP Address"
-manuName = "CMDB Manufacturer"
-modelName = "CMDB Model"
-locationName = "CMDB Location"
-criticalityName = "CMDB Criticality"
-serviceClassName = "CMDB Service Classification"
-installName = "CMDB Installation Path"
-statusName = "CMDB Status"
-serialName = "CMDB Serial"
-opStatusName = "CMDB Operational Status"
-monitorObName = "CMDB Monitoring Object Id"
-monitorToolName = "CMDB Monitoring Tool"
-isMonitoredName	= "CMDB IsMonitored"
-domainName = "CMDB Domain DNS"
-assetTagName = "CMDB Asset Tag"
-
-propNameSet = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
-					locationName,criticalityName,serviceClassName, installName, \
-					statusName, serialName, opStatusName, domainName, \
-					monitorObName, monitorToolName, isMonitoredName, assetTagName}
-
-propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": deviceTypeName, \
-					osName: "OS Version", "Function Type": fnName, \
-					"IP Address": ipName,  "Manufacturer": manuName, "Model ID": modelName, \
-					"Location": locationName, "Criticality": criticalityName, "Service classification": serviceClassName, \
-					"Installation Path": installName, "Status": statusName, "Serial number": serialName, \
-					"Operational status": opStatusName, "DNS Domain": domainName, \
-					"Monitoring Object ID": monitorObName, "Monitoring Tool": monitorToolName, "Is Monitored": isMonitoredName, \
-					"Asset tag": assetTagName}
-
-propRevLookup = dict()
-for p in propLookup:
-	propRevLookup[propLookup[p]] = p
-					
-computerClass = "Computer"
-printerClass = "Printer"
-appStr = "cmdb_ci_appl"
-appClass = "Application"
-businessStr = "cmdb_ci_service" 
-busServiceClass = "Business Service"
-busOfferStr = "service_offering"
-busOfferingClass = "Service Offering"
-serverStr = "cmdb_ci_server"
-serverClass = "Server"
-esxServerStr = "cmdb_ci_esx_server"
-esxServerClass = "ESX Server"
-aixServerStr = "cmdb_ci_aix_server"
-aixServerClass = "AIX Server"
-dbStr = "cmdb_ci_database"
-dbClass = "Database"
-dbInstStr = "cmdb_ci_db_instance"
-dbInstClass = "Database Instance"
-dbOraStr = "cmdb_ci_db_ora_instance"
-dbOraClass = "Oracle Instance"
-dbSqlStr = "cmdb_ci_db_mssql_instance"
-dbSQLClass = "MSFT SQL Instance"
-db2DbStr = "cmdb_ci_db_db2_instance"
-mySqlDbStr = "cmdb_ci_db_mysql_instance"
-sybDbStr = "cmdb_ci_db_syb_instance"
-linuxClass = "Linux Server"
-linuxStr = "cmdb_ci_linux_server"
-solarisClass = "Solaris Server"
-solarisStr = "cmdb_ci_solaris_server"
-netClass = "Network Gear"
-netStr = "cmdb_ci_netgear"
-winClass = "Windows Server"
-winStr = "cmdb_ci_win_server"
-storageDevClass = "Storage Device"
-storageDevStr = "cmdb_ci_storage_device"
-storageServerClass = "Storage Server"
-storageServerStr = "cmdb_ci_storage_server"
-sanSwitchStr = "cmdb_ci_storage_switch"
-sanSwitchClass = "Storage Switch"
-sanFabricClass = "SAN Fabric"
-sanFabricStr = "cmdb_ci_storage_switch"
-sanClass = "Storage Area Network"
-sanStr = "cmdb_ci_san"
-containerClass = "Storage Container Object"
-containerStr = "cmdb_ci_container_object"
-netgearStr = "cmdb_ci_netgear"
-subnetStr = "cmdb_ci_subnet"
-lbhwStr = "cmdb_ci_lb"
-lbhwClass = "Load Balancer"
-lbswStr = "cmdb_ci_lb_appl"
-lbswClass = "Load Balancer Application"
-groupStr = "cmdb_ci_group"
-vcenterClass = "VMware vCenter Instance"
-vcenterStr = "cmdb_ci_vcenter"
-vmwareClass = "VMware Virtual Machine Instance"
-vmwareStr = "cmdb_ci_vmware_instance"
-vmClass = "Virtual Machine Instance"
-vmStr = "cmdb_ci_vm_instance"
-lparServerStr = "cmdb_ci_mainframe_lpar"
-clusterStr = "cmdb_ci_cluster"
-clusterClass = "Cluster"
-rackStr = "cmdb_ci_rack"
-rackClass = "Rack"
 
 company = "NIE Networks"
 
@@ -183,22 +77,6 @@ def findSubnet(ipAddr):
 			break;
 	return ret
 	
-
-#Process header line and return a dict keyed by column name, with value of field number	
-def processHeader(headerLine):
-	cols = headerLine.strip('\n\r').split(',')
-	colDict = dict()
-	num = 0;
-	for col in cols:
-		colDict[col.strip()] = num
-		num += 1
-	return colDict
-
-#Process header line and return a of each header	
-def getPropList(headerLine):
-	cols = headerLine.strip('\n\r').split(',')
-	return cols
-
 def generateLine(id, columnList, outFile):
 	name = nodesById.get(id)
 	nodeProps = allPropsById[id]
@@ -228,6 +106,20 @@ def generateLine(id, columnList, outFile):
 	if changed:	
 		print >>outFile, out
 	return changed
+
+def exportAssets(outFile, templateFile, exportList):
+	fdb = open(outFile, "w")
+	fdbtemplate = open(templateFile)
+	for t in fdbtemplate:
+		print >>fdb,t
+		cols = getPropList(t)
+		if len(cols) > 0: break #Got header
+	fdbtemplate.close
+	entries = 0
+	for id in exportList:
+		if generateLine(id, cols, fdb): entries += 1
+	fdb.close
+	return entries
 	
 #Read in existing relationships
 frels = open("relations.csv")
@@ -283,7 +175,8 @@ for line in fprops:
 			elif val == rackStr: rackList.append(id)
 			elif val == lbhwStr: hwlbList.append(id)
 			elif val == lbswStr: swlbList.append(id)
-			elif val == netgearStr or val == subnetStr or val == groupStr: pass
+			elif val == netgearStr  or val == fwStr: netgearList.append(id)
+			elif val == subnetStr or val == groupStr: pass
 			else: print "Not accounted for cmdb class: %s\n" % val
 		lstr = ""
 fprops.close
@@ -329,7 +222,7 @@ for lstr in fcmdb:
 	opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
 	#print cmdbId, classField, status, fields[cols['Updates']]
 	#opStatus = 
-	if status == "Retired": continue
+	#if status == "Retired": continue
 	#if opStatus == "Decommissioned": continue
 	cmdbClass = ''
 	if classField == "Computer" or classField == "Printer": continue
@@ -360,6 +253,7 @@ for lstr in fcmdb:
 	elif classField == rackClass: cmdbClass = rackStr
 	elif classField == lbhwClass: cmdbClass = lbhwStr
 	elif classField == lbswClass: cmdbClass = lbswStr
+	elif classField == fwClass: cmdbClass = fwStr
 	else : 
 		print "WARNING: (Snow read 1) CMDB name %s: Unrecognised CMDB class field: %s - ignoring entry" % (name, classField)
 	if cmdbClass != '':
@@ -435,7 +329,7 @@ for lstr in fnodes:
 		desc += fs[n]
 	#nodesByName[name] = id
 	nodesById[id] = name
-	nodes[lowerName] = id
+	nodesByName[lowerName] = id
 	nodeDescByName[name] = desc
 	firstName = ''
 	if nodeType == "Node" and "(" in name: 
@@ -445,18 +339,24 @@ for lstr in fnodes:
 		firstName = lowerName.split(".")[0]
 		nodesFirstName[firstName] = id
 	propsChanged[id] = set()
+	archieStatus = existingProps.get((id, statusName), '').strip()
+	archieRetired = archieStatus == "Retired" or archieStatus == "Absent" or archieStatus == "Disposed"
 	if lowerName in cmdb: #Check props are the same - if not add to CMDB list to change
 		cmdbId = cmdb[lowerName]
-		for propName in propNameSet:
-			archieVal = existingProps.get((id, propName), '').strip()
-			cmdbVal = cmdbProps.get((cmdbId, propName), '')
-			if archieVal != '' and archieVal != 'Unknown' and cmdbVal.strip() != archieVal:
-				print "%s has a changed property: %s (Archi = %s, CMDB = %s" % (name, propName, archieVal, cmdbVal)
-				propsChanged[id].add(propName)
+		cmdbStatus = cmdbProps.get((cmdbId, statusName), '').strip()
+		cmdbRetired = cmdbStatus == "Retired" or cmdbStatus == "Absent" or cmdbStatus == "Disposed"
+		if (cmdbRetired and not archieRetired) or (not cmdbRetired and archieRetired) or (not archieRetired and not cmdbRetired):
+			for propName in propNameSet:
+				archieVal = existingProps.get((id, propName), None)
+				cmdbVal = cmdbProps.get((cmdbId, propName), None)
+				if archieVal is None or cmdbVal is None: continue
+				if archieVal.strip() != '' and archieVal.strip() != 'Unknown' and cmdbVal.strip() != archieVal.strip():
+					print "%s has a changed property: %s (Archi = %s, CMDB = %s" % (name, propName, archieVal, cmdbVal)
+					propsChanged[id].add(propName)
 	else:
 		#set all properties on new CI
 		propsChanged[id] = propNameSet  
-	if lowerName not in cmdb or len(propsChanged[id]) > 0: 
+	if not archieRetired and (lowerName not in cmdb or len(propsChanged[id]) > 0):
 		#Generate new or changed things
 		#by adding to the correct new CI list
 		if id in appsList: newAppsList.append(id)
@@ -471,6 +371,7 @@ for lstr in fnodes:
 		elif id in clusterList: newClusterList.append(id)
 		elif id in hwlbList: newHWLBList.append(id)
 		elif id in swlbList: newSWLBList.append(id)
+		elif id in netgearList: newNetGearList.append(id)
 		#else: print "Missing id %s of class %s not handled\n" % (id, props.get(classPropName, '*CLASS NOT FOUND*'))
 	
 fnodes.close
@@ -542,10 +443,10 @@ for line in fh:
 			break
 	if skip : continue
 	#Skip if already set in elements file
-	if baseAddr.lower() in nodes :
+	if baseAddr.lower() in nodesByName :
 		#print "subnet %s already exists" % subnet
 		baseAddr = baseAddr.lower()
-		subnets.append((nodes[baseAddr], baseAddr, mask))
+		subnets.append((nodesByName[baseAddr], baseAddr, mask))
 	else:
 		print "WARNING - found new subnet???? %s" % baseAddr
 	
@@ -612,7 +513,7 @@ for lstr in fcmdb:
 	
 	#skip dev/test / retired / EUC
 	if classField == computerClass or classField == printerClass : continue #Ignore all EUC devices
-	if status == "Retired": continue
+	#if status == "Retired": continue
 	#if opStatus == "Decommissioned": continue
 	if "#DECOM" in name: continue
 	#if classField == appClass: continue #lots of system sofware in the CMDB, not just apps
@@ -644,92 +545,79 @@ for lstr in fcmdb:
 	elif classField == rackClass: cmdbClass = rackStr
 	elif classField == lbhwClass: cmdbClass = lbhwStr
 	elif classField == lbswClass: cmdbClass = lbswStr
+	elif classField == fwClass: cmdbClass = fwStr
 	else : 
 		print "WARNING: (Snow create) CMDB id %s, name %s: Unrecognised CMDB class field: %s - ignoring entry" % (cmdbId, name, classField)
 		continue
-#	if lowerName in nodes or lowerName in nodesFirstName or firstName in nodes: 
-#	if lowerName in nodes or firstName in nodes: 
-	if lowerName in nodes: 
-		#Check all properties are set
-		if lowerName in nodes: nodeId = nodes[lowerName]
-		elif lowerName in nodesFirstName: nodeId = nodesFirstName[lowerName]
-		else: nodeId = nodes[firstName]
-		val = existingProps.get((nodeId, cmdbIdName), '')
-		if cmdbId != val:
-			if val != '':
-				# print "Warning: %s Cmdb id has changed: from %s to %s - not changing" % (name, val, cmdbId)
-				print "Warning: %s Cmdb id has changed: from %s to %s" % (name, val, cmdbId)
-			# else:
-			props[(nodeId, cmdbIdName)] = cmdbId
-		val = existingProps.get((nodeId, classPropName), '')
-		if cmdbClass != val:
-			props[(nodeId, classPropName)] = cmdbClass
-			if val != '':
-				print "Warning: %s Cmdb class has changed: from %s to %s - not changing" % (name, val, cmdbClass)
-			else:
+#	if lowerName in nodesByName or lowerName in nodesFirstName or firstName in nodesByName: 
+#	if lowerName in nodesByName or firstName in nodesByName: 
+	archieStatus = existingProps.get((id, statusName), '').strip()
+	archieRetired = archieStatus == "Retired" or archieStatus == "Absent" or archieStatus == "Disposed"
+	cmdbRetired = status == "Retired" or status == "Absent" or status == "Disposed"
+	if lowerName in nodesByName: 
+		if (cmdbRetired and not archieRetired) or (not cmdbRetired and archieRetired) or (not archieRetired and not cmdbRetired):
+			#Check all properties are set
+			if lowerName in nodesByName: nodeId = nodesByName[lowerName]
+			elif lowerName in nodesFirstName: nodeId = nodesFirstName[lowerName]
+			else: nodeId = nodesByName[firstName]
+			val = existingProps.get((nodeId, cmdbIdName), '')
+			if cmdbId != val:
+				if val != '':
+					# print "Warning: %s Cmdb id has changed: from %s to %s - not changing" % (name, val, cmdbId)
+					print "Warning: %s Cmdb id has changed: from %s to %s" % (name, val, cmdbId)
+				# else:
+				props[(nodeId, cmdbIdName)] = cmdbId
+			val = existingProps.get((nodeId, classPropName), '')
+			if cmdbClass != val:
 				props[(nodeId, classPropName)] = cmdbClass
-		val = existingProps.get((nodeId, locationName), '')
-		if location != '' and location != 'Unknown' and location != val:
-			props[(nodeId, locationName)] = location
-		val = existingProps.get((nodeId, deviceTypeName), '')
-		if deviceType != '' and deviceType != 'Unknown' and deviceType != val:
-			props[(nodeId, deviceTypeName)] = deviceType
-		val = existingProps.get((nodeId, fnName), '')
-		if funType != '' and funType != 'Unknown' and funType != val:
-			props[(nodeId, fnName)] = funType
-		val = existingProps.get((nodeId, ipName), '')
-		if ipAddr != '' and ipAddr != 'Unknown' and ipAddr != val:
-			props[(nodeId, ipName)] = ipAddr
-			rel = (nodeId, "AssociationRelationship", subnet[0])
-			if subnet[0] != "0" and rel not in existingRels: 
-				netrels.append((nodeId, "AssociationRelationship", subnet[0], ipAddr))
-		val = existingProps.get((nodeId, manuName), '')
-		if manufacturer != '' and manufacturer != 'Unknown' and manufacturer != val:
-			props[(nodeId, manuName)] = manufacturer
-		val = existingProps.get((nodeId, modelName), '')
-		if model != '' and model != 'Unknown' and model != val:
-			props[(nodeId, modelName)] = model
-		val = existingProps.get((nodeId, serialName), '')
-		if serial != '' and serial != 'Unknown' and serial != val:
-			props[(nodeId, serialName)] = serial
-		val = existingProps.get((nodeId, statusName), '')
-		if status != '' and status != 'Unknown' and status != val:
-			props[(nodeId, statusName)] = status
-		val = existingProps.get((nodeId, isMonitoredName), '')
-		if isMonitored != '' and isMonitored != val:
-			props[(nodeId, isMonitoredName)] = isMonitored
-		val = existingProps.get((nodeId, monitorObName), '')
-		if monitoringObject != '' and monitoringObject != val:
-			props[(nodeId, monitorObName)] = monitoringObject
-		val = existingProps.get((nodeId, monitorToolName), '')
-		if monitoringTool != '' and monitoringTool != val:
-			props[(nodeId, monitorToolName)] = monitoringTool
-		val = existingProps.get((nodeId, opStatusName), '')
-		if opStatus != '' and opStatus != val:
-			props[(nodeId, opStatusName)] = opStatus
-		val = existingProps.get((nodeId, assetTagName), '')
-		if assetTag != '' and assetTag != val:
-			props[(nodeId, assetTagName)] = assetTag
-	else :
-		#if name.startswith("NIE-CTX") : continue #Cytrix nodes are wrong currently
-		if status == "Retired" or status == "Absent" : continue
-		#if classField == appClass:
-		#	print "WARNING: Ignoring application %s" % name
-		#	continue #lots of system sofware in the CMDB, not just apps
-		#Skip creating dev/test for now
-		#if lowerName.startswith("nied") : continue
-		#if lowerName.startswith("nie-drg"): continue
-		#if lowerName.startswith("nie-dg") : continue
-		#if lowerName.startswith("esd-nie"): continue
-		#if lowerName.startswith("esd-ctx"): continue
-		#if lowerName.startswith("billing2"): continue
-		#if lowerName.startswith("redhat2"): continue
-		#if "test" in lowerName: continue
-		#if "tst" in lowerName: continue
-		#if "dev" in lowerName: continue
-		#if "Dargan" in location: continue
-		#if (classField == serverClass or classField == aixServerClass) and "(" in name: continue #ignore servers with ( in name
-		#Create node
+				if val != '':
+					print "Warning: %s Cmdb class has changed: from %s to %s - not changing" % (name, val, cmdbClass)
+				else:
+					props[(nodeId, classPropName)] = cmdbClass
+			val = existingProps.get((nodeId, locationName), '')
+			if location != '' and location != 'Unknown' and location != val:
+				props[(nodeId, locationName)] = location
+			val = existingProps.get((nodeId, deviceTypeName), '')
+			if deviceType != '' and deviceType != 'Unknown' and deviceType != val:
+				props[(nodeId, deviceTypeName)] = deviceType
+			val = existingProps.get((nodeId, fnName), '')
+			if funType != '' and funType != 'Unknown' and funType != val:
+				props[(nodeId, fnName)] = funType
+			val = existingProps.get((nodeId, ipName), '')
+			if ipAddr != '' and ipAddr != 'Unknown' and ipAddr != val:
+				props[(nodeId, ipName)] = ipAddr
+				rel = (nodeId, "AssociationRelationship", subnet[0])
+				if subnet[0] != "0" and rel not in existingRels: 
+					netrels.append((nodeId, "AssociationRelationship", subnet[0], ipAddr))
+			val = existingProps.get((nodeId, manuName), '')
+			if manufacturer != '' and manufacturer != 'Unknown' and manufacturer != val:
+				props[(nodeId, manuName)] = manufacturer
+			val = existingProps.get((nodeId, modelName), '')
+			if model != '' and model != 'Unknown' and model != val:
+				props[(nodeId, modelName)] = model
+			val = existingProps.get((nodeId, serialName), '')
+			if serial != '' and serial != 'Unknown' and serial != val:
+				props[(nodeId, serialName)] = serial
+			val = existingProps.get((nodeId, statusName), '')
+			if status != '' and status != 'Unknown' and status != val:
+				props[(nodeId, statusName)] = status
+			val = existingProps.get((nodeId, isMonitoredName), '')
+			if isMonitored != '' and isMonitored != val:
+				props[(nodeId, isMonitoredName)] = isMonitored
+			val = existingProps.get((nodeId, monitorObName), '')
+			if monitoringObject != '' and monitoringObject != val:
+				props[(nodeId, monitorObName)] = monitoringObject
+			val = existingProps.get((nodeId, monitorToolName), '')
+			if monitoringTool != '' and monitoringTool != val:
+				props[(nodeId, monitorToolName)] = monitoringTool
+			val = existingProps.get((nodeId, opStatusName), '')
+			if opStatus != '' and opStatus != val:
+				props[(nodeId, opStatusName)] = opStatus
+			val = existingProps.get((nodeId, assetTagName), '')
+			if assetTag != '' and assetTag != val:
+				props[(nodeId, assetTagName)] = assetTag
+	elif not cmdbRetired: 
+		#Dont add ones that have been retired
 		#print name, status
 		dstr = "%s\n" % classField
 		if deviceType != '': dstr += "Device Type: %s\n" % deviceType
@@ -815,7 +703,6 @@ if len(newClusterList) > 0:
 	fbustemplate.close
 	entries = 0
 	for id in newClusterList:
-		print id
 		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
 	if entries == 0: os.remove(outFile)
@@ -870,7 +757,7 @@ if len(newBusServicesList) > 0:
 	else: print "%d Business Service Offering entries" % entries
 
 if len(newDatabaseList) > 0:
-	outFile = "new-cmdb-databases.csv"
+	outFile = "new-cmdb-database-instances.csv"
 	fdb = open(outFile, "w")
 	fdbtemplate = open("Database_Instance_Import_Template.csv")
 	entries = 0
@@ -956,20 +843,18 @@ if len(newSanStorageSwList) > 0:
 
 if len(newSanFabricList) > 0:
 	outFile = "new-cmdb-sanfabric.csv"
-	fdb = open(outFile, "w")
-	fdbtemplate = open("SAN_Fabric_Import_Template.csv")
-	for t in fdbtemplate:
-		print >>fdb,t
-		cols = getPropList(t)
-		if len(cols) > 0: break #Got header
-	fdbtemplate.close
-	entries = 0
-	for id in newSanFabricList:
-		if generateLine(id, cols, fdb): entries += 1
-	fdb.close
+	templateFile = "SAN_Fabric_Import_Template.csv"
+	entries = exportAssets(outFile, templateFile, newSanFabricList)
 	if entries == 0: os.remove(outFile)
 	else: print "%d SAN Fabric entries" % entries
 
+if len(newNetGearList) > 0:
+	outFile = "new-cmdb-netgear.csv"
+	templateFile = "Network_Gear_Import_Template.csv"
+	entries = exportAssets(outFile, templateFile, newNetGearList)
+	if entries == 0: os.remove(outFile)
+	else: print "%d Net Gear entries" % entries
+	
 #Now update archie
 felems = open("new-elements.csv", "w")
 print >>felems,'"ID","Type","Name","Documentation"'

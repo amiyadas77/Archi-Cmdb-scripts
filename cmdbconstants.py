@@ -123,12 +123,13 @@ domainName = "CMDB Domain DNS"
 assetTagName = "CMDB Asset Tag"
 
 propNameSet = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
-					locationName,criticalityName,serviceClassName, installName, \
+					locationName, criticalityName, serviceClassName, installName, \
 					statusName, serialName, opStatusName, domainName, \
 					monitorObName, monitorToolName, isMonitoredName, assetTagName}
-
+			
 propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": deviceTypeName, \
-					osName: "OS Version", "Function Type": fnName, \
+					
+					"OS Version": osName, "Function Type": fnName, \
 					"IP Address": ipName,  "Manufacturer": manuName, "Model ID": modelName, \
 					"Location": locationName, "Criticality": criticalityName, "Service classification": serviceClassName, \
 					"Installation Path": installName, "Status": statusName, "Serial number": serialName, \

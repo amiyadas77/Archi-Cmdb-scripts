@@ -190,6 +190,10 @@ for lstr in fcmdb:
 	count += 1
 	if count == 1:
 		cols = processHeader(lstr)
+		for propName in propNameSet:
+			col = cols.get(propRevLookup[propName], None)
+			if col == None: 
+				print "WARNING: Property %s not in CMDB export" % propRevLookup[propName]
 		continue
 	if lstr.count('"') % 2 == 1:
 		#Multi-line entry
@@ -259,33 +263,38 @@ for lstr in fcmdb:
 	if cmdbClass != '':
 		cmdb[name] = cmdbId
 		cmdbProps[(cmdbId, classPropName)] = cmdbClass
-		if status != '' : cmdbProps[(cmdbId, statusName)] = status
-		if opStatus != '' : cmdbProps[(cmdbId, opStatusName)] = opStatus
-		deviceType = fields[cols[propRevLookup[deviceTypeName]]].strip()
-		if deviceType != '': cmdbProps[(cmdbId, deviceTypeName)] = deviceType
-		funType = fields[cols[propRevLookup[fnName]]].strip()
-		if funType != '': cmdbProps[(cmdbId, fnName)] = funType
-		ipAddr = fields[cols[propRevLookup[ipName]]].strip()
-		if ipAddr != '': 
-			cmdbProps[(cmdbId, ipName)] = ipAddr
-			subnet = ('0', '0', '0')
-			subnet = findSubnet(ipAddr)
-		location = fields[cols[propRevLookup[locationName]]]
-		if location != '': cmdbProps[(cmdbId, locationName)] = location
-		manufacturer = fields[cols[propRevLookup[manuName]]].strip("(Manufacturer)").strip()
-		if manufacturer != '' : cmdbProps[(cmdbId, manuName)] = manufacturer
-		model = fields[cols[propRevLookup[modelName]]].strip()
-		if model != '' : cmdbProps[(cmdbId, modelName)] = model
-		isMonitored = fields[cols[propRevLookup[isMonitoredName]]].strip()
-		if isMonitored != '' : cmdbProps[(cmdbId, isMonitoredName)] = isMonitored
-		monitoringObject = fields[cols[propRevLookup[monitorObName]]].strip()
-		if monitoringObject != '' : cmdbProps[(cmdbId, monitorObName)] = monitoringObject
-		monitoringTool = fields[cols[propRevLookup[monitorToolName]]].strip()
-		if monitoringTool != '' : cmdbProps[(cmdbId, monitorToolName)] = monitoringTool
-		serial = fields[cols[propRevLookup[serialName]]].strip()
-		if serial != '' : cmdbProps[(cmdbId, serialName)] = serial
-		assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
-		if assetTag != '' : cmdbProps[(cmdbId, assetTagName)] = assetTag
+		for propName in propNameSet:
+			if propName == classPropName: continue
+			col = cols.get(propRevLookup[propName], None)
+			if col != None: 
+				val = fields[col].strip()
+				if propName == manuName: val = val.strip("(Manufacturer)").strip()
+				cmdbProps[(cmdbId, propName)] = val
+		# ipAddr = fields[cols[propRevLookup[ipName]]].strip()
+		# if ipAddr != '': 
+			# cmdbProps[(cmdbId, ipName)] = ipAddr
+			# subnet = ('0', '0', '0')
+			# subnet = findSubnet(val)		
+		# if status != '' : cmdbProps[(cmdbId, statusName)] = status
+		# if opStatus != '' : cmdbProps[(cmdbId, opStatusName)] = opStatus
+		# deviceType = fields[cols[propRevLookup[deviceTypeName]]].strip()
+		# if deviceType != '': cmdbProps[(cmdbId, deviceTypeName)] = deviceType
+		# funType = fields[cols[propRevLookup[fnName]]].strip()
+		# if funType != '': cmdbProps[(cmdbId, fnName)] = funType
+		# location = fields[cols[propRevLookup[locationName]]]
+		# if location != '': cmdbProps[(cmdbId, locationName)] = location
+		# model = fields[cols[propRevLookup[modelName]]].strip()
+		# if model != '' : cmdbProps[(cmdbId, modelName)] = model
+		# isMonitored = fields[cols[propRevLookup[isMonitoredName]]].strip()
+		# if isMonitored != '' : cmdbProps[(cmdbId, isMonitoredName)] = isMonitored
+		# monitoringObject = fields[cols[propRevLookup[monitorObName]]].strip()
+		# if monitoringObject != '' : cmdbProps[(cmdbId, monitorObName)] = monitoringObject
+		# monitoringTool = fields[cols[propRevLookup[monitorToolName]]].strip()
+		# if monitoringTool != '' : cmdbProps[(cmdbId, monitorToolName)] = monitoringTool
+		# serial = fields[cols[propRevLookup[serialName]]].strip()
+		# if serial != '' : cmdbProps[(cmdbId, serialName)] = serial
+		# assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
+		# if assetTag != '' : cmdbProps[(cmdbId, assetTagName)] = assetTag
 
 fcmdb.close
 

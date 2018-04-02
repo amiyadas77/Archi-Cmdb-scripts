@@ -55,27 +55,11 @@ devs = dict()
 lpars = dict()
 nets = dict()
 buss = dict()
-subnets = list()
+
 
 company = "NIE Networks"
 
-def inSubnet(subnet, mask, ipToCheck):
-	if (subnet == '' or mask == '' or ipToCheck == ''):
-		print "Empty field, cant look for subnet for IP: %s, %s, %s" % (subnet,mask,ipToCheck)
-		return False
-	subs = subnet.split('.')
-	mk = mask.split('.')
-	ip = ipToCheck.split('.')
-	#print subnet, mask, ipToCheck
-	return (int(ip[0]) & int(mk[0]) == int(subs[0])) and (int(ip[1]) & int(mk[1]) == int(subs[1])) and int(ip[2]) & int(mk[2]) == int(subs[2]) and int(ip[3]) & int(mk[3]) == int(subs[3])
 
-def findSubnet(ipAddr):
-	ret = ("0", "0", "0")
-	for id, subnet, mask in subnets:
-		if inSubnet(subnet, mask, ipAddr): 
-			ret = (id, subnet, mask)
-			break;
-	return ret
 	
 def generateLine(id, columnList, outFile):
 	name = nodesById.get(id)
@@ -386,80 +370,8 @@ for lstr in fnodes:
 fnodes.close
 #print "Existing nodes: " + str(count) + ": " + str(len(nodes))
 
-#TODO: Replace with using existing properties to set up subnets
-fh = open("subnets.csv", "r")
-prevStr = False
-for line in fh:
-	lstr = line
-	if lstr.count('"') == 1:
-		#Multi-line entry
-		#print "Multi"
-		if not prevStr:
-			#First line
-			prevStr = True
-			while lstr.rfind(',') > lstr.rfind('"'):
-				#Remove commas in text
-				r = lstr.rfind(',')
-				lstr = lstr[0:r] + lstr[r+1:len(lstr)]
-			fullStr += lstr
-			#print "current str: %s, fullStr: %s" % (lstr,fullStr)
-			continue
-		fullStr += lstr
-	elif prevStr:
-		#Continuing line, remove any commas
-		fullStr += lstr.replace(',',' ')
-		continue
-	else :
-		fullStr = lstr
-	prevStr = False
-	#Remove commas in quoted strings
-	if fullStr.count('"') == 2:
-		left = fullStr[0:fullStr.find('"')]
-		right = fullStr[fullStr.rfind('"') + 1:len(fullStr)]
-		quoted = fullStr[fullStr.find('"'):fullStr.rfind('"')+1]
-		#print "bits: left:%s right:%s quoted:%s" % (left,right,quoted)
-		fullStr = left + quoted.replace(',','') + right
-		#print "cleaned: " + fullStr
-	fs = fullStr.rstrip('\n\r').split(",")
-	fullStr = ''
-	subnet = fs[1].split('/')
-	desc = fs[2].strip('"')
-	site = fs[3]
-	#Skip if no description, as not used
-	if desc == '' : continue
-	baseAddr = subnet[0]
-	bits = int(subnet[1])
-	mask = "0.0.0.0"
-	if bits >= 24:
-		topBits = 8 - (32 - bits)
-		m = 0
-		for i in range(7, 7-topBits,-1) :
-			m += 1 << i
-		mask = "255.255.255.%d" % m
-		#print "Bits %d == mask %s" % (bits, mask)
-	elif bits == 16:
-		mask = "255.255.0.0"
-	elif bits == 8:
-		mask = "255.0.0.0"
-	else :
-		print "Cant calculate bitmask for subnet %s" % (fs[1])
-	#print "Subnet %s - mask: %s" % (subnet, mask)
-	#Skip if subnet already in VLAN table
-	skip = False
-	for id, sub, m in subnets:
-		if sub == baseAddr and m == mask :
-			skip = True
-			break
-	if skip : continue
-	#Skip if already set in elements file
-	if baseAddr.lower() in nodesByName :
-		#print "subnet %s already exists" % subnet
-		baseAddr = baseAddr.lower()
-		subnets.append((nodesByName[baseAddr], baseAddr, mask))
-	else:
-		print "WARNING - found new subnet???? %s" % baseAddr
-	
-fh.close
+#Load in subnets - can only be done once elements have been read
+loadSubnets()
 
 print "SNOW CMDB import to Archie warnings"
 #Re-process CMDB export to determine what needs to be imported into Archie

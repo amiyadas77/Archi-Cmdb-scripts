@@ -106,8 +106,8 @@ for line in fprops:
 		val = fs[2].strip('"')
 		propKey = (id, name)
 		props[propKey] = val
-		if name == classPropStr: classByNode[id] = val
-		if name == cmdbIdStr: 
+		if name == classPropName: classByNode[id] = val
+		if name == cmdbIdName: 
 			archieIdtoCmdbId[id] = val
 		
 		lstr = ""
@@ -398,10 +398,10 @@ for d in cmdbRelSet:
 	child = d[3]
 	strength = d[4]
 	outage = d[5]
-	propKey = (child, classPropStr)
+	propKey = (child, classPropName)
 	childClass = props.get(propKey, '')
 	#if childClass == lparServerStr: childClass = aixServerStr  #Convert class to AIX rather than the mainframe lpar
-	propKey = (parent, classPropStr)
+	propKey = (parent, classPropName)
 	parentClass = props.get(propKey, '')
 	fn = props.get((child, fnName), '')
 	if fn == "Unknown": fn = ''
@@ -421,10 +421,10 @@ for d in cmdbRelSet:
 	parentMissing = False
 	childMissing = False
 	if parent not in archieIdtoCmdbId:
-		missingFromCmdb.add((nodesById[parent], (parent, classPropStr) in props))
+		missingFromCmdb.add((nodesById[parent], (parent, classPropName) in props))
 		parentMissing = True
 	if child not in archieIdtoCmdbId:
-		missingFromCmdb.add((nodesById[child],(child, classPropStr) in props))
+		missingFromCmdb.add((nodesById[child],(child, classPropName) in props))
 		childMissing = True
 	#Use the following for actual export to CMDB
 	if not childMissing and not parentMissing:
@@ -477,10 +477,10 @@ for d in allFullCmdbSet:
 	type = d[1]
 	strength = d[3]
 	outage = d[4]
-	propKey = (child, classPropStr)
+	propKey = (child, classPropName)
 	childClass = props.get(propKey, '')
 	#if childClass == lparServerStr: childClass = aixServerStr  #Convert class to AIX rather than the mainframe lpar
-	propKey = (parent, classPropStr)
+	propKey = (parent, classPropName)
 	parentClass = props.get(propKey, '')
 	fn = props.get((child, fnName), '')
 	if fn == "Unknown": fn = ''

@@ -174,6 +174,7 @@ for lstr in fcmdb:
 	count += 1
 	if count == 1:
 		cols = processHeader(lstr)
+		#print cols
 		for propName in propNameSet:
 			col = cols.get(propRevLookup[propName], None)
 			if col == None: 
@@ -795,11 +796,12 @@ for b in buss:
 felems.close
 
 frels = open("new-relations.csv", "w")
+freadable = open("new-relations-readable.csv", "w")
 print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
+print >>freadable,'"Parent","Child","Relationship"'
 for rel in rels:
 	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
-for rel in netrels:
-	print >>frels, '"","%s","%s","","%s","%s"' % (rel[1], rel[3], rel[0], rel[2])
+	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
 frels.close	
 
 fprops = open("new-properties.csv", "w")

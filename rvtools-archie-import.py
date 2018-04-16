@@ -1,6 +1,12 @@
 #Compares Vmware RVTools export files with Archie export and creates new Archie import for elements / properties / rels 
 #Author: Danny Andersen
 
+#TODO 
+#Add properties for CPU and Memory
+#If OS is different - reset in both description and property
+#Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
+#Link + unlink to host ESXi server
+
 import sys
 import os
 import uuid
@@ -15,23 +21,8 @@ existingProps = dict() #Keyed by node id + property name
 allPropsById = dict() #dict of dict of all properties found for a particular element keyed by its id  and the prop name
 nodesFirstName = dict() #id keyed by nodes first word
 nodeDescByName = dict() #dict of node descriptions keyed by name
-
-appsList = list() # list of application ids
-serverList = list() # list of server ids
-busServicesList = list() # list of business services ids
-dbServerList = list() #list of db ids
-vmList = list() # list of VM ids
-vcenterList = list() # list of vCenter ids
-sanList = list() #List of storage kit
-sanFabricList = list() #List of storage kit
-sanStorageSwList = list() #List of Storage switches
-dbList = list() # list of dbs
-containerList = list() # list of storage containers
-clusterList = list() # list of clusters
-rackList = list() # list of racks
-hwlbList = list() # list of HW loadbalancers
-swlbList = list() # list of SW loadbalancers
-netgearList = list() # list of network devices
+nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
+vmList = set() # set of VM ids in Archie
 
 sysSoftware = dict() #id keyed by systemsoftware
 hosts = dict()
@@ -51,6 +42,7 @@ cpuStr = "CPUs"
 memoryStr = "Memory"
 ipStr = "IP Address"
 osStr = "OS"
+osTools = "OS according to the VMware Tools"
 hostStr = "Host"
 clStr = "Cluster"
 esxStr = "ESX Version"
@@ -61,8 +53,8 @@ noCPUStr = "# CPU"
 noCoresStr = "# Cores"
 noMemory = "# Memory"
 
-rvToolsLookup = {cpuStr: cpuName, memoryStr: memName, \
-					osStr: osName, ipStr: ipName }
+# rvToolsLookup = {cpuStr: cpuName, memoryStr: memName, \
+					# osStr: osName, ipStr: ipName }
 					
 #Read in existing nodes from exported file
 fnodes = open("elements.csv", "r")
@@ -102,7 +94,7 @@ for lstr in fnodes:
 	#nodesByName[name] = id
 	nodesById[id] = name
 	nodesByName[lowerName] = id
-	nodeDescByName[name] = desc
+	nodeDescByName[lowerName] = desc
 	firstName = ''
 	if nodeType == "Node" and "(" in name: 
 		firstName = lowerName.split(" ")[0]
@@ -152,28 +144,15 @@ for line in fprops:
 		else:
 			allPropsById[id] = dict()
 			allPropsById[id][name] = val
-		if name == classPropName:
-			if val == appStr: appsList.append(id)
-			elif val == serverStr or val == esxServerStr or val == aixServerStr \
-							or val == linuxStr or val == solarisStr or val == winStr or val == lparServerStr: serverList.append(id)
-			elif val == vmwareStr or val == vmStr: vmList.append(id)
-			elif val == vcenterStr: vcenterList.append(id)
-			elif val == businessStr or val == busOfferStr: busServicesList.append(id)
-			elif val == dbInstStr or val == dbSqlStr or val == dbOraStr or val == dbStr \
-				or val == db2DbStr or val == mySqlDbStr or val == sybDbStr : dbList.append(id)
-			elif val == sanSwitchStr: sanStorageSwList.append(id)
-			elif val == sanFabricStr: sanFabricList.append(id)
-			elif val == sanStr: sanList.append(id)
-			elif val == storageServerStr: sanList.append(id)
-			elif val == storageDevStr: sanList.append(id)
-			elif val == containerStr: containerList.append(id)
-			elif val == clusterStr: clusterList.append(id)
-			elif val == rackStr: rackList.append(id)
-			elif val == lbhwStr: hwlbList.append(id)
-			elif val == lbswStr: swlbList.append(id)
-			elif val == netgearStr  or val == fwStr: netgearList.append(id)
-			elif val == subnetStr or val == groupStr: pass
-			else: print "Not accounted for cmdb class: %s\n" % val
+		#CMDB Model = Virtual Machine or (CMDB Device Type = Virtual Server and CMDB Class != cmdb_ci_aix_server)  or CMDB Manufacturer = VMware)
+		if (name == deviceTypeName and val == "Virtual Server"):
+			cls = allPropsById[id].get(classPropName, '')
+			if cls != aixServerStr and cls != esxServerStr:
+				vmList.add(id)
+		elif (name == modelName and val == "Virtual Machine") or \
+			(name == manuName and val == "VMware"):
+			vmList.add(id)
+		if (name == classPropName and (val == aixServerStr or val == esxServerStr) and id in vmList): vmList.remove(id)  #Remove ESX + AIX servers from VM list
 		lstr = ""
 fprops.close
 
@@ -196,8 +175,8 @@ def processVHost(cols, row):
 	lowerHost = host.lower()
 	if lowerHost in nodesByName:
 		hostId = nodesByName[lowerHost]
-		if (hostId, classPropStr) not in existingProps:
-			props[(hostId, classPropStr)] = "cmdb_ci_esx_server"
+		if (hostId, classPropName) not in existingProps:
+			props[(hostId, classPropName)] = "cmdb_ci_esx_server"
 		if (hostId, deviceTypeName) not in existingProps:
 			props[(hostId, deviceTypeName)] = "Physical Server"
 		if (hostId, osName) not in existingProps:
@@ -216,7 +195,7 @@ def processVHost(cols, row):
 		id = str(uuid.uuid4())
 		hosts[host] = (id, docStr)
 		nodesById[id] = host
-		props[(id, classPropStr)] = "cmdb_ci_esx_server"
+		props[(id, classPropName)] = "cmdb_ci_esx_server"
 		props[(id, deviceTypeName)] = "Physical Server"
 		props[(id, osName)] = esx
 		if domain != '': props[(id, domainName)] = domain
@@ -224,38 +203,58 @@ def processVHost(cols, row):
 def processVNetwork(cols, row):
 	#Find subnet
 	server = row[cols[vm]].value.strip()
+	if server in nameSwap: server = nameSwap[server]
 	ipAddr = row[cols[ipStr]].value.strip()
+	powered = row[cols[powerState]].value.strip()
 	#print server, ipAddr
-	if ipAddr != "unknown":
-		if ',' in ipAddr:
+	if powered != "poweredOff" and ipAddr != "unknown":
+		if ':' or ',' in ipAddr:
 			#Remove ipv6 part
 			fs = ipAddr.split(',')
+			ipAddr = ''
 			for f in fs:
 				if '.' in f:
 					ipAddr = f.strip()
 					break
 		subnet = ('0', '0', '0')
-		if ipAddr != '' : subnet = findSubnet(ipAddr)
-		if server.lower() in nodesByName:
-			id = nodesByName[server.lower()]
-		else:
-			(id, docStr) = servers[server]
-			#New server - add in IP addr
-			docStr += "\nIP Address: " + ipAddr
-			servers[server] = (id, docStr)
-		if ipAddr != '' and (id, ipName) not in existingProps:
-			props[(id, ipName)] = ipAddr
-		rel = (id, "AssociationRelationship", subnet[0])
-		if subnet[0] != "0" and rel not in existingRels: 
-			netrels.append((id, "AssociationRelationship", subnet[0], ipAddr))
+		if ipAddr != '' : 
+			subnet = findSubnet(ipAddr)
+			if server.lower() not in nodesByName:
+				#New server - add in IP addr to desc
+				(id, docStr) = servers[server]
+				docStr += "\nIP Address: " + ipAddr
+				servers[server] = (id, docStr)
+			else:
+				id = nodesByName[server.lower()]
+			if ipAddr != '' and (id, ipName) not in existingProps:
+				props[(id, ipName)] = ipAddr
+			rel = (id, "AssociationRelationship", subnet[0])
+			if subnet[0] != "0" and rel not in existingRels: 
+				netrels.append((id, "AssociationRelationship", subnet[0], ipAddr))
 
 #Process row in spreadsheet
 def processVInfo(cols, row):
 	server = row[cols[vm]].value.strip()
-	osystem = row[cols[osStr]].value.strip()
+	osCol = cols.get(osStr, cols.get(osTools))
+	if osCol is None: 
+		print "Failed to find OS column"
+		osystem = ''
+	else:
+		osystem = row[osCol].value.strip()
 	host = row[cols[hostStr]].value.strip()
 	powered = row[cols[powerState]].value.strip()
 	fqdn = row[cols[dnsStr]].value.strip()
+	dnsName = fqdn.split('.')[0]
+	if fqdn != '' and dnsName.lower() != server.lower():
+		id = nodesByName.get(dnsName.lower())
+		if id is not None:
+			if id in vmList:
+				#Remove found VM from list
+				vmList.remove(id)
+			#Use dnsName rather than VM name as the Archi / CMDB name
+			print "WARNING: Server %s has a different DNS name: %s, using fqdn name" % (server,fqdn)
+			nameSwap[server] = dnsName
+			server = dnsName
 	cluster = row[cols[clStr]].value.strip()
 	cpus = "%d" % row[cols[cpuStr]].value
 	ram = "%d GB" % (row[cols[memoryStr]].value/1024)
@@ -282,58 +281,72 @@ def processVInfo(cols, row):
 			if hostId != "":
 				rel = (hostId, "CompositionRelationship", nodesByName[server])
 				if not (rel in existingRels): rels.append(rel)
-			if osystem.lower() not in sysSoftware:
-				#Add OS to system software
-				osid = str(uuid.uuid4())
-				softs[osystem] = (osid, osystem) #Add to ones to create
-				sysSoftware[osystem.lower()] = osid #Add to existing node set
-				rel = (id, "AssignmentRelationship", osid)
-				if rel not in existingRels : rels.append(rel)
-			else:
-				rel = (id, "AssignmentRelationship", sysSoftware[osystem.lower()])
-				if rel not in existingRels : rels.append(rel)
-			if (id, classPropStr) not in existingProps:
-				if "windows" in osystem.lower():
-					props[(id, classPropStr)] = "cmdb_ci_win_server"
-				elif "linux" in osystem.lower():
-					props[(id, classPropStr)] = "cmdb_ci_linux_server"
-				elif "solaris" in osystem.lower():
-					props[(id, classPropStr)] = "cmdb_ci_solaris_server"
-				elif "aix" in osystem.lower():
-					props[(id, classPropStr)] = "cmdb_ci_aix_server"
+			if osystem != '' :
+				if osystem.lower() not in sysSoftware:
+					#Add OS to system software
+					osid = str(uuid.uuid4())
+					softs[osystem] = (osid, osystem) #Add to ones to create
+					nodesById[osid] = osystem  #Add to node array to resolve id to name
+					sysSoftware[osystem.lower()] = osid #Add to existing node set
+					rel = (id, "AssignmentRelationship", osid)
+					if rel not in existingRels : rels.append(rel)
 				else:
-					props[(id, classPropStr)] = "cmdb_ci_server"
+					rel = (id, "AssignmentRelationship", sysSoftware[osystem.lower()])
+					if rel not in existingRels : rels.append(rel)
+			if (id, classPropName) not in existingProps:
+				if "windows" in osystem.lower():
+					props[(id, classPropName)] = "cmdb_ci_win_server"
+				elif "linux" in osystem.lower():
+					props[(id, classPropName)] = "cmdb_ci_linux_server"
+				elif "solaris" in osystem.lower():
+					props[(id, classPropName)] = "cmdb_ci_solaris_server"
+				elif "aix" in osystem.lower():
+					props[(id, classPropName)] = "cmdb_ci_aix_server"
+				else:
+					props[(id, classPropName)] = "cmdb_ci_server"
 			if (id, deviceTypeName) not in existingProps:
 				props[(id, deviceTypeName)] = "Virtual Server"
 			if (id, osName) not in existingProps:
 				props[(id, osName)] = osystem
+			if (id, opStatusName) not in existingProps:
+				props[(id, opStatusName)] = "Live"
 			if (id, domainName) not in existingProps and domain != '':
 				props[(id, domainName)] = domain
+			if id in vmList:
+				#Remove found VM from list
+				vmList.remove(id)
+			else:
+				print "VM %s not in Archie Vm list - setting virtual server properties" % server
+				props[(id, deviceTypeName)] = "Virtual Server"
+				props[(id, modelName)] = "Virtual Machine"
+				props[(id, manuName)] = "VMware"
 		else :
 			docStr = "Vmware VM\nOperating System: " + osystem
 			docStr += "\n%s vCPU %s RAM" % (cpus, ram)
-			docStr += "\nCluster " + cluster
+			docStr += "\nvCluster: " + cluster
 			id = str(uuid.uuid4())
 			servers[server] = (id, docStr)
 			nodesById[id] = server
 			if hostId != "" :
 				rels.append((hostId, "CompositionRelationship", id))
 			if "windows" in osystem.lower():
-				props[(id, classPropStr)] = "cmdb_ci_win_server"
+				props[(id, classPropName)] = "cmdb_ci_win_server"
 			elif "linux" in osystem.lower():
-				props[(id, classPropStr)] = "cmdb_ci_linux_server"
+				props[(id, classPropName)] = "cmdb_ci_linux_server"
 			elif "solaris" in osystem.lower():
-				props[(id, classPropStr)] = "cmdb_ci_solaris_server"
+				props[(id, classPropName)] = "cmdb_ci_solaris_server"
 			elif "aix" in osystem.lower():
-				props[(id, classPropStr)] = "cmdb_ci_aix_server"
+				props[(id, classPropName)] = "cmdb_ci_aix_server"
 			else:
-				props[(id, classPropStr)] = "cmdb_ci_server"
-			props[(id, deviceTypeName)] = "Virtual Server"			
-			props[(id, osName)] = osystem
+				props[(id, classPropName)] = "cmdb_ci_server"
+			props[(id, deviceTypeName)] = "Virtual Server"
+			if osystem != '': props[(id, osName)] = osystem
+			props[(id, opStatusName)] = "Live"
 			if osystem.lower() not in sysSoftware:
 				#Add OS to system software
 				osid = str(uuid.uuid4())
 				softs[osystem] = (osid, osystem) #Add to ones to create
+				nodesById[osid] = osystem  #Add to node array to resolve id to name
 				sysSoftware[osystem.lower()] = osid #Add to existing node set
 				rel = (id, "AssignmentRelationship", osid)
 				rels.append(rel)
@@ -342,7 +355,30 @@ def processVInfo(cols, row):
 				rels.append(rel)
 			if domain != '':
 				props[(id, domainName)] = domain
-
+	else:
+		if server.lower() in nodesByName:
+			id = nodesByName[server.lower()]
+			#Remove from Vmlist as its only poweredoff (and not decommissioned)
+			if id in vmList:
+				#Remove found VM from list
+				vmList.remove(id)
+			else:
+				print "Powered off VM %s not in Archie Vm list - setting virtual server properties" % server
+				props[(id, deviceTypeName)] = "Virtual Server"
+				props[(id, modelName)] = "Virtual Machine"
+				props[(id, manuName)] = "VMware"
+			#Check Operational status and set to powered off
+			state = existingProps.get((id, opStatusName), None)
+			if state != "Powered Off":
+				print "Setting %s to Powered off - currently set to %s" % (server, state)
+				props[(id, opStatusName)] = "Powered Off"
+				desc = nodeDescByName[server.lower()].strip('"')
+				#Amend desc
+				newDesc = "Note: VM powered off\n%s" % desc
+				servers[server] = (id, newDesc)
+			monitored = existingProps.get((id, isMonitoredName), None)
+			if monitored.lower() == "true" : props[(id, isMonitoredName)] = "FALSE"
+				
 def rowToCsv(row):
 	out = ""
 	for c in row:
@@ -352,41 +388,80 @@ def rowToCsv(row):
 
 #Process each RVTools workbook
 for file in os.listdir('.'):
-	if file.startswith("RVTools_") and file.endswith(".xls"):
+	if file.startswith("RVTools_") and (file.endswith(".xls") or file.endswith(".xlsx")):
+		print "Processing RVtools file %s" % file
 		wb = xlrd.open_workbook(file)
-		ws = wb.sheet_by_name('tabvHost')
+		#Process Vmware hosts
+		try:
+			ws = wb.sheet_by_name('tabvHost')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vHost')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+				continue
 		count = 0
 		for row in ws.get_rows():
-			#print rowCsv
 			count += 1
 			if count == 1:
 				rowCsv = rowToCsv(row)
 				cols = processHeader(rowCsv)
 			else:
 				processVHost(cols, row)
-		ws = wb.sheet_by_name('tabvInfo')
+		#Process VMs
+		try:
+			ws = wb.sheet_by_name('tabvInfo')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vInfo')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+				continue
 		count = 0
 		for row in ws.get_rows():
-			#print rowCsv
 			count += 1
 			if count == 1:
 				rowCsv = rowToCsv(row)
 				cols = processHeader(rowCsv)
+				#print cols
 			else:
 				processVInfo(cols, row)
-		ws = wb.sheet_by_name('tabvNetwork')
+		#Process VM network info
+		try:
+			ws = wb.sheet_by_name('tabvNetwork')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vNetwork')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+				continue
 		count = 0
 		for row in ws.get_rows():
-			#print rowCsv
 			count += 1
 			if count == 1:
 				rowCsv = rowToCsv(row)
 				cols = processHeader(rowCsv)
 			else:
-				#Add to list of VMs 
 				processVNetwork(cols, row)
 
-exit
+#Proces remaining vmList - these are VMs that are not in RVtools and so should be marked as decommmissioned
+print "Processing Archi list of VMs - decommissioning ones that are not in RvTools"
+for id in vmList:
+	name = nodesById[id]
+	#print "%s server not in RVtools list - marking as decommissioned" % name
+	#Check Operational status
+	if name.startswith("NIE-TH-TLG") or name.startswith("redhat90") or name.lower().startswith("srv-hps-nie-ercgb"): continue  # Ignore tooling server until it is managed by the cloud team
+	state = existingProps.get((id, opStatusName), None)
+	if state != "Disposed" and state != "Decommissioned":
+		print "Setting %s to Disposed" % name
+		props[(id, opStatusName)] = "Disposed"
+		props[(id, isMonitoredName)] = "FALSE"
+		props[(id, statusName)] = "Retired"
+		desc = nodeDescByName[name.lower()].strip('"')
+		#Amend desc
+		newDesc = "Note: DECOMMISSIONED SERVER\n%s" % desc
+		servers[name] = (id, newDesc)
+	
 
 felems = open("new-elements.csv", "w")
 print >>felems,'"ID","Type","Name","Documentation"'
@@ -406,14 +481,15 @@ for s in softs:
 	print >>felems,'"%s","SystemSoftware","%s","%s"' % (softs[s][0], s, softs[s][1])
 	
 felems.close
-
 frels = open("new-relations.csv", "w")
+freadable = open("new-relations-readable.csv", "w")
 print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
+print >>freadable,'"Parent","Child","Relationship"'
 for rel in rels:
 	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
-for rel in netrels:
-	print >>frels, '"","%s","%s","","%s","%s"' % (rel[1], rel[3], rel[0], rel[2])
+	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
 frels.close	
+
 
 fprops = open("new-properties.csv", "w")
 fread = open("new-properties-readable.csv", "w")

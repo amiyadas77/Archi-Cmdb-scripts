@@ -8,19 +8,19 @@
 import sys
 import uuid
 import csv
+from cmdbconstants import *
 
-rels = dict()
-props = dict() #Keyed by (node id, property name)
-nodesByName = dict() #Keyed by node name, id of node
-nodesById = dict() # Keyed by node id, name of node
-cmdb = dict() #Keyed by Name, cmdb id
+allowedRels = dict() # Keyed by (classFrom, classTo, ArchieRelationship) value = (CMDB Rel, parent->child = True)
 archieIdtoCmdbId = dict() #keyed by Archie id, cmdb id
-alwaysDepends = dict() #"Always" connection, Keyed by dependant, set of (dependency, outage, relationship)
-clusterDepends = dict() #"Cluster" connection, Keyed by dependant, set of (dependany, outage, relationship)
-occasionalDepends = dict() #"Occasional" connection, Keyed by dependant, set of (dependany, outage, relationship)
-infreqDepends = dict() #"Infrequent" connection, Keyed by dependant, set of dependancies
+# alwaysDepends = dict() #"Always" connection, Keyed by dependant, set of (dependency, outage, relationship)
+# clusterDepends = dict() #"Cluster" connection, Keyed by dependant, set of (dependany, outage, relationship)
+# occasionalDepends = dict() #"Occasional" connection, Keyed by dependant, set of (dependany, outage, relationship)
+# infreqDepends = dict() #"Infrequent" connection, Keyed by dependant, set of dependancies
+depends = dict() #Keyed by dependant (parent), set of (dependency (child), relationship, strength, outage)
 cmdbRelSet = set() #Set of dependencies (parent, relationship, child, strength, outage)
 missingFromCmdb = set() # Set of node names missing from CMDB
+classByNode = dict() # Keyed by node id, the Cmdb class of the node
+cmdbToArchiRels = dict() # Keyed by (classFrom, classTo, CMDB Rel) value = (ArchieRelationship, parent->child = True)
 
 appsList = list() # list of application ids
 serverList = list() # list of server ids
@@ -37,100 +37,6 @@ rackList = list() # list of racks
 hwlbList = list() # list of HW loadbalancers
 swlbList = list() # list of SW loadbalancers
 
-cmdbIdName = "CMDB ID"
-classPropStr = "CMDB Class"
-osName = "CMDB Operating System"
-strengthPropStr = "CMDB-REL Strength"
-outagePropStr = "CMDB-REL Outage"
-deviceTypeName = "CMDB Device Type"
-osName = "CMDB Operating System"
-fnName = "CMDB Function"
-ipName = "CMDB IP Address"
-statusName = "CMDB Status"
-
-propNameSet = {cmdbIdName, classPropStr, deviceTypeName, osName, fnName, ipName, statusName}
-
-propLookup = {"Unique ID": cmdbIdName, "Class": classPropStr, "Device Type": deviceTypeName, \
-					osName: "OS Version", "Function Type": fnName, \
-					"IP Address": ipName, "Status": statusName}
-
-propRevLookup = dict()
-for p in propLookup:
-	propRevLookup[propLookup[p]] = p
-
-alwaysStr = "Always"
-clusterStr = "Cluster"
-occStr = "Occasional"
-infreqStr = "Infrequent"
-
-computerClass = "Computer"
-printerClass = "Printer"
-appStr = "cmdb_ci_appl"
-appClass = "Application"
-businessStr = "cmdb_ci_service"
-busServiceClass = "Business Service"
-busOfferStr = "service_offering"
-busOfferingClass = "Service Offering"
-serverStr = "cmdb_ci_server"
-serverClass = "Server"
-esxServerStr = "cmdb_ci_esx_server"
-esxServerClass = "ESX Server"
-aixServerStr = "cmdb_ci_aix_server"
-aixServerClass = "AIX Server"
-dbStr = "cmdb_ci_database"
-dbClass = "Database"
-dbInstStr = "cmdb_ci_db_instance"
-dbInstClass = "Database Instance"
-dbOraStr = "cmdb_ci_db_ora_instance"
-dbOraClass = "Oracle Instance"
-dbSqlStr = "cmdb_ci_db_mssql_instance"
-dbSQLClass = "MSFT SQL Instance"
-db2DbStr = "cmdb_ci_db_db2_instance"
-mySqlDbStr = "cmdb_ci_db_mysql_instance"
-sybDbStr = "cmdb_ci_db_syb_instance"
-linuxClass = "Linux Server"
-linuxStr = "cmdb_ci_linux_server"
-solarisClass = "Solaris Server"
-solarisStr = "cmdb_ci_solaris_server"
-netClass = "Network Gear"
-netStr = "cmdb_ci_netgear"
-winClass = "Windows Server"
-winStr = "cmdb_ci_win_server"
-storageDevClass = "Storage Device"
-storageDevStr = "cmdb_ci_storage_device"
-storageServerClass = "Storage Server"
-storageServerStr = "cmdb_ci_storage_server"
-sanSwitchStr = "cmdb_ci_storage_switch"
-sanSwitchClass = "Storage Switch"
-sanFabricClass = "SAN Fabric"
-sanFabricStr = "cmdb_ci_storage_switch"
-sanClass = "Storage Area Network"
-sanStr = "cmdb_ci_san"
-containerClass = "Storage Container Object"
-containerStr = "cmdb_ci_container_object"
-netgearStr = "cmdb_ci_netgear"
-subnetStr = "cmdb_ci_subnet"
-lbhwStr = "cmdb_ci_lb"
-lbhwClass = "Load Balancer"
-lbswStr = "cmdb_ci_lb_appl"
-lbswClass = "Load Balancer Application"
-groupStr = "cmdb_ci_group"
-vcenterClass = "VMware vCenter Instance"
-vcenterStr = "cmdb_ci_vcenter"
-vmwareClass = "VMware Virtual Machine Instance"
-vmwareStr = "cmdb_ci_vmware_instance"
-vmClass = "Virtual Machine Instance"
-vmStr = "cmdb_ci_vm_instance"
-lparServerStr = "cmdb_ci_mainframe_lpar"
-clusterStr = "cmdb_ci_cluster"
-clusterClass = "Cluster"
-rackStr = "cmdb_ci_rack"
-rackClass = "Rack"
-
-servingStr = "ServingRelationship"
-compositionStr = "CompositionRelationship"
-specialStr = "SpecialisationRelationship"
-company = "NIE Networks"
 
 dependsOnStr = "Depends on::Used By"
 runsOnStr = "Runs on::Runs"
@@ -141,43 +47,32 @@ storageStr = "Provides storage for::Stored on"
 
 
 #Add dependencies for passed in id, recursing down the tree - each dependency keyed by dependant, set of (dependency, outage, relationship)
-def addDepend(id, subId):
-	#print "app id: %s - dependent id %s\n" % (id, subId)
-	if subId in alwaysDepends:
-		for dependency in alwaysDepends[subId]:
-			#print "A,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
-			cmdbRelSet.add((id, dependency[2], dependency[0], alwaysStr, dependency[1]))
-			addDepend(id, dependency[0])
-	if subId in clusterDepends:
-		for dependency in clusterDepends[subId]:
-			#print "C,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
-			cmdbRelSet.add((id, dependency[2], dependency[0], clusterStr, dependency[1]))
-			addDepend(id, dependency[0])
-	if subId in occasionalDepends:
-		for dependency in occasionalDepends[subId]:
-			#print "O,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
-			cmdbRelSet.add((id, dependency[2], dependency[0], occStr, dependency[1]))
-			addDepend(id, dependency[0])
-	if subId in infreqDepends:
-		for dependency in infreqDepends[subId]:
-			#print "I,%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[dependency[0]])
-			cmdbRelSet.add((id, dependency[2], dependency[0], infreqStr, dependency[1]))
-			addDepend(id, dependency[0])
-
-			#Process header line and return a dict keyed by column name, with value of field number	
-def processHeader(headerLine):
-	cols = headerLine.strip('\n\r').split(',')
-	colDict = dict()
-	num = 0;
-	for col in cols:
-		colDict[col.strip()] = num
-		num += 1
-	return colDict
-
-#Process header line and return a of each header	
-def getPropList(headerLine):
-	cols = headerLine.strip('\n\r').split(',')
-	return cols
+def addDepend(id, subId):  #Note: Id = Super parent, subId = add all subIds as children
+	global cmdbRelSet
+	global depends
+	global allowedRels
+	#print "%s: Adding children of %s" % (nodesById[id], nodesById[subId])
+	rels = depends.get(subId, set())
+	for rel in rels:
+		type = rel[2]
+		child = rel[0]
+		srcClass = classByNode.get(child, 'NONE')
+		targetClass = classByNode.get(subId, 'NONE')
+		relByClass = (srcClass, targetClass, type)
+		#print rel, relByClass, relByClass in allowedRels
+		#print "%s:%s, %s:%s, %s" % (nodesById[child], srcClass, nodesById[subId], targetClass, nodesById[rel[0]])
+		#print "%s,%s,%s" % (nodesById[child], nodesById[subId], rel)
+		#cmdbRel -> (parent, relationship, child, strength, outage)
+		#rel => (dependency (child), relationship, strength, outage)
+		if relByClass in allowedRels or srcClass == 'NONE' or targetClass == 'NONE':
+			if type == passThruStr or srcClass == 'NONE' or targetClass == 'NONE':
+				print "%s: Pass thru adding children of : %s" % (nodesById[id], nodesById[child])
+				addDepend(id, child) #pass thru of a pass thru - add childrens children
+			else:
+				newRel = (id, type, child, rel[3], rel[4])
+				#print "Adding %s,%s,%s" % (nodesById[id], newRel[1], nodesById[child])
+				cmdbRelSet.add((newRel[0], newRel[1], newRel[2], newRel[3], newRel[4]))
+				addDepend(id, child)
 
 #Read in Archie nodes from exported file
 fnodes = open("elements.csv", "r")
@@ -194,7 +89,23 @@ for line in fnodes:
 	nodesByName[name] = id
 	nodesById[id] = name
 fnodes.close
-#print "Existing nodes: " + str(count) + ": " + str(len(nodes))
+
+#Read in allowed relationships rules
+#(classFrom, classTo, ArchieRelationship) value = (CMDB Rel, parent->child = True)
+frules = open("rel-rules.csv")
+count = 0
+for line in frules:
+	count += 1
+	if count == 1: continue
+	fs = line.strip('\n\r').split(",")
+	srcRel = fs[0].strip()
+	targetRel = fs[1].strip()
+	archieRel = fs[2].strip()
+	type = fs[3].strip()
+	keepDirRel = fs[4].strip().lower() == 'true'
+	allowedRels[(srcRel, targetRel, archieRel)] = (type, keepDirRel)
+	cmdbToArchiRels[(srcRel, targetRel, type)] = (archieRel, keepDirRel)
+frules.close
 
 #Read in existing properties
 fprops = open("properties.csv")
@@ -211,7 +122,8 @@ for line in fprops:
 		val = fs[2].strip('"')
 		propKey = (id, name)
 		props[propKey] = val
-		if name == classPropStr:
+		if name == classPropName:
+			classByNode[id] = val
 			if val == appStr: appsList.append(id)
 			elif val == serverStr or val == esxServerStr or val == aixServerStr \
 							or val == linuxStr or val == solarisStr or val == winStr or val == lparServerStr: serverList.append(id)
@@ -275,12 +187,10 @@ for lstr in fcmdb:
 		archieIdtoCmdbId[nodeId] = cmdbId
 fcmdb.close
 
-#Read in relationships and create dependency subtrees based on "CMDB-REL Strength" prop
-#ServingRelationship -> store source against target 
-#CompositionRelationship -> store target against source if src is Application (app depends on sub apps), 
-#	or store source against target if source is server (VM depends on physical)
-#SpecialisationRelationship -> store target against source
-#AggregationRelationship -> ignore
+#Read in relationships and create dependency subtrees
+#These relationships are used in the next pass of the relations file to add in sub-relations if 
+#the relationship is a pass-thru relationship. This is when the CMDB data model cannot handle a particular
+#relationship or class type but sub-relationships might.
 frels = open("relations.csv")
 count = 0
 lstr = ""
@@ -295,47 +205,32 @@ for line in frels:
 		srcId = fs[4].strip('"')
 		type = fs[1].strip('"')
 		targetId = fs[5].strip('"')
-		relStrenPropKey = (relId, strengthPropStr)
-		depend = alwaysDepends
-		outage = 100
-		if relStrenPropKey in props : 
-			if props[relStrenPropKey] == clusterStr:
-				depend = clusterDepends
-				relOutagePropKey = (relId, outagePropStr)
-				if relOutagePropKey in props:
-					outage = props[relOutagePropKey]
-			elif props[relStrenPropKey] == occStr:
-				depend = occasionalDepends
-			elif props[relStrenPropKey] == infreqStr:
-				depend = infreqDepends
-		if type == servingStr: 							#Serving relationship
-			relType = dependsOnStr
-			if srcId in serverList and (targetId in appsList or targetId in dbList):
-				relType = runsOnStr #App runs on server
-			if targetId in depend:
-				depend[targetId].add((srcId, outage, relType))
-			else:
-				depend[targetId] = set([(srcId, outage, relType)])
-		elif type == compositionStr:  					#Composition
-			if srcId in appsList or srcId in busServicesList or srcId in groupList:
-				#Application or Bus service composed of others, add target to source
-				if srcId in depend:
-					depend[srcId].add((targetId, outage, dependsOnStr))
-				else:
-					depend[srcId] = set([(targetId, outage, dependsOnStr)])
-			elif srcId in serverList:
-				#Server is part of another server, e.g. lpar in host, add source to target
-				if targetId in depend: 
-					depend[targetId].add((srcId, outage, dependsOnStr))
-				else:
-					depend[targetId] = set([(srcId, outage, dependsOnStr)])
-		elif type == specialStr: 						#Specialisation
-			if targetId in depend:
-				depend[targetId].add((srcId, outage, dependsOnStr))
-			else:
-				depend[targetId] = set([(srcId, outage, dependsOnStr)])
+		srcClass = classByNode.get(srcId, 'NONE')
+		targetClass = classByNode.get(targetId, 'NONE')
+		strength = props.get((relId, strengthPropStr), alwaysStr)
+		outage = "100"
+		if strength == clusterRelStr:
+			outage = props.get((relId, outagePropStr), "0")
+		if srcClass == 'NONE' or targetClass == 'NONE': 
+			relByClass = ('NONE', 'NONE', type)
+		else: 
+			relByClass = (srcClass, targetClass, type)
+		if relByClass in allowedRels: 
+			#Relationship is allowed by datamodel or a passthru
+			cmdbRel = allowedRels[relByClass]
+			if cmdbRel[1]: # Parent->Child = Src->Target
+				rel = (targetId, cmdbRel[0], type, strength, outage)
+				if srcId in depends: depends[srcId].add(rel)
+				else: depends[srcId] = set([rel])
+			else: # Parent->Child = Target->Src i.e. swap the direction of relationship
+				rel = (srcId, cmdbRel[0], type, strength, outage)
+				if targetId in depends: depends[targetId].add(rel)
+				else: depends[targetId] = set([rel])
 		lstr = ""
 frels.close
+
+#print allowedRels
+print "Dependencies: %d, Rules: %d" % (len(depends), len(allowedRels))
 
 #For each app / bus service node:
 #Find all "serving" rels that have target of node, add them to dependency set
@@ -358,13 +253,13 @@ for d in cmdbRelSet:
 	# d= (parent, relationship, child, strength, outage)
 	parent = d[0]
 	if parent not in archieIdtoCmdbId:
-		missingFromCmdb.add((nodesById[parent], (parent, classPropStr) in props))
+		missingFromCmdb.add((nodesById[parent], (parent, classPropName) in props))
 		continue
 	child = d[2]
 	if child not in archieIdtoCmdbId:
-		missingFromCmdb.add((nodesById[child],(child, classPropStr) in props))
+		missingFromCmdb.add((nodesById[child],(child, classPropName) in props))
 		continue
-	propKey = (child, classPropStr)
+	propKey = (child, classPropName)
 	childClass = props.get(propKey, '')
 	if childClass == lparServerStr: childClass = aixServerStr  #Convert class to AIX rather than the mainframe lpar
 	fn = props.get((child, fnName), '')

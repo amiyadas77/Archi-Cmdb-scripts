@@ -25,29 +25,31 @@ missingFromCmdb = set() # Set of node names missing from CMDB
 missingRels = set() # Set of archie class relationships not in data model (i.e. rules csv file)
 
 #Add dependencies for passed in id, recursing down the tree - each dependency keyed by dependant, set of (dependency, outage, relationship)
-def addDepend(id, subId, inType):  #Note: Id = Super parent, subId = add all subIds as children
+def addDepend(id, subId):  #Note: Id = Super parent, subId = add all subIds as children
 	global fullCmdbSet
 	global cmdbRelSet
 	global depends
+	global allowedRels
 	print "%s: Pass thru - adding children of %s" % (nodesById[id], nodesById[subId])
-	srcClass = classByNode.get(id, 'NONE')
 	rels = depends.get(subId, set())
 	for rel in rels:
-		#print "%s,%s,%s" % (nodesById[id], nodesById[subId], nodesById[rel[0]])
-		#print "%s,%s,%s" % (nodesById[id], nodesById[subId], rel)
+		type = rel[2]
+		cmdbType = rel[1]
+		child = rel[0]
+		srcClass = classByNode.get(child, 'NONE')
+		targetClass = classByNode.get(subId, 'NONE')
+		relByClass = (srcClass, targetClass, type)
+		#print "%s,%s,%s" % (nodesById[child], nodesById[subId], rel)
+		#print "%s:%s -%s-> %s:%s, %s = %s" % (nodesById[child], srcClass, type, nodesById[subId], targetClass, nodesById[rel[0]], relByClass in allowedRels)
 		#cmdbRel -> (parent, relationship, child, strength, outage)
 		#rel => (dependency (child), relationship, strength, outage)
-		type = rel[1]
-		child = rel[0]
-		targetClass = classByNode.get(targetId, 'NONE')
-		relByClass = (srcClass, targetClass, type)
 		if relByClass in allowedRels or srcClass == 'NONE' or targetClass == 'NONE': 
-			if type == passThruStr or srcClass == 'NONE' or targetClass == 'NONE':
+			if cmdbType == passThruStr or srcClass == 'NONE' or targetClass == 'NONE':
 				print "%s: Pass thru - of a passthru adding children of : %s" % (nodesById[id], nodesById[child])
 				addDepend(id, child) #pass thru of a pass thru - add childrens children
 			else:
-				newRel = (id, type, child, rel[2], rel[3])
-				shortRel = (id, type, child)
+				newRel = (id, cmdbType, child, rel[3], rel[4])
+				shortRel = (id, cmdbType, child)
 				allFullCmdbSet.add(newRel) #Add to a complete set of all relations to check for deletions
 				allShortCmdbSet.add(shortRel) #Add to a complete set of all relations to check for deletions
 				if shortRel not in existingCmdbRels:
@@ -215,19 +217,11 @@ for line in fcmdb:
 	strength = fs[cols[strengthName]].strip()
 	outage = fs[cols[outageName]].strip()
 	if parentId == None:
-		cmdbId = cmdb[parent.lower()]
-		cmdbStatus = cmdbProps.get((cmdbId, statusName), '').strip()
-		cmdbRetired = cmdbStatus == "Retired" or cmdbStatus == "Absent" or cmdbStatus == "Disposed"
-		if not cmdbRetired:
-			print "Warning: CMDB CI %s not found in Archie - run sync on new CI extract" % parent
 		skip = True
+		print "Warning: CMDB CI %s not found in Archie - run sync on new CI extract" % parent
 	if childId == None:
-		cmdbId = cmdb[child.lower()]
-		cmdbStatus = cmdbProps.get((cmdbId, statusName), '').strip()
-		cmdbRetired = cmdbStatus == "Retired" or cmdbStatus == "Absent" or cmdbStatus == "Disposed"
-		if not cmdbRetired:
-			print "Warning: CMDB CI %s not in Archie - run sync on new CI extract" % child
 		skip = True
+		print "Warning: CMDB CI %s not found in Archie - run sync on new CI extract" % child
 	if not skip:
 		rel = (parentId, type, childId, strength, outage)
 		shortRel = (parentId, type, childId)
@@ -255,6 +249,7 @@ for line in frels:
 		targetId = fs[5].strip('"')
 		srcClass = classByNode.get(srcId, 'NONE')
 		targetClass = classByNode.get(targetId, 'NONE')
+		#Need to check that both target and src are live
 		strength = props.get((relId, strengthPropStr), alwaysStr)
 		outage = "100"
 		if strength == clusterRelStr:
@@ -267,11 +262,11 @@ for line in frels:
 			#Relationship is allowed by datamodel or a passthru
 			cmdbRel = allowedRels[relByClass]
 			if cmdbRel[1]: # Parent->Child = Src->Target
-				rel = (targetId, cmdbRel[0], strength, outage)
+				rel = (targetId, cmdbRel[0], type, strength, outage)
 				if srcId in depends: depends[srcId].add(rel)
 				else: depends[srcId] = set([rel])
 			else: # Parent->Child = Target->Src i.e. swap the direction of relationship
-				rel = (srcId, cmdbRel[0], strength, outage)
+				rel = (srcId, cmdbRel[0], type, strength, outage)
 				if targetId in depends: depends[targetId].add(rel)
 				else: depends[targetId] = set([rel])
 		lstr = ""
@@ -314,7 +309,7 @@ for line in frels:
 			if keepDirection: # Parent->Child = Src->Target
 				if passThru:
 					#Need to add in childs relationships directly to the parent, i.e. skip the intermediate
-					addDepend(srcId, targetId, type)
+					addDepend(srcId, targetId)
 				else:
 					newRel = (srcId, cmdbRelType, targetId, strength, outage)
 					shortRel = (srcId, cmdbRelType, targetId)
@@ -328,7 +323,7 @@ for line in frels:
 			else: # Parent->Child = Target->Src
 				if passThru: 
 					#Need to add in childs relationships directly to the parent
-					addDepend(targetId, srcId, type)
+					addDepend(targetId, srcId)
 				else:
 					newRel = (targetId, cmdbRelType, srcId, strength, outage)
 					shortRel = (targetId, cmdbRelType, srcId)
@@ -342,7 +337,6 @@ for line in frels:
 		else:
 			missingRels.add((relByClass, nodesById[srcId], nodesById[targetId]))
 			#print "Rel not allowed in Data model: (%s, %s, %s)" % relByClass
-
 		lstr = ""
 frels.close
 

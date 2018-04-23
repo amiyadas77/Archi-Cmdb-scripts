@@ -335,11 +335,13 @@ for lstr in fnodes:
 	propsChanged[id] = set()
 	archieStatus = existingProps.get((id, statusName), '').strip()
 	archieRetired = archieStatus == "Retired" or archieStatus == "Absent" or archieStatus == "Disposed"
+	retired = False
 	if lowerName in cmdb: #Check props are the same - if not add to CMDB list to change
 		cmdbId = cmdb[lowerName]
 		cmdbStatus = cmdbProps.get((cmdbId, statusName), '').strip()
 		cmdbRetired = cmdbStatus == "Retired" or cmdbStatus == "Absent" or cmdbStatus == "Disposed"
-		if (cmdbRetired and not archieRetired) or (not cmdbRetired and archieRetired) or (not archieRetired and not cmdbRetired):
+		retired = not((cmdbRetired and not archieRetired) or (not cmdbRetired and archieRetired) or (not archieRetired and not cmdbRetired))
+		if not retired:
 			for propName in propNameSet:
 				archieVal = existingProps.get((id, propName), None)
 				cmdbVal = cmdbProps.get((cmdbId, propName), None)
@@ -350,7 +352,7 @@ for lstr in fnodes:
 	else:
 		#set all properties on new CI
 		propsChanged[id] = propNameSet  
-	if not archieRetired and (lowerName not in cmdb or len(propsChanged[id]) > 0):
+	if not retired and (lowerName not in cmdb or len(propsChanged[id]) > 0):
 		#Generate new or changed things
 		#by adding to the correct new CI list
 		if id in appsList: newAppsList.append(id)
@@ -631,9 +633,9 @@ if len(newClusterList) > 0:
 	else: print "%d cluster entries" % entries
 
 if len(newHWLBList) > 0:
-	outFile = "new-cmdb-hw-loadbalancers.csv"
+	outFile = "new-cmdb-loadbalancers.csv"
 	fbus = open(outFile, "w")
-	fbustemplate = open("HW_Load_Balancer_Import_Template.csv")
+	fbustemplate = open("Load_Balancer_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
@@ -647,9 +649,9 @@ if len(newHWLBList) > 0:
 	else: print "%d HW loadbalancers entries" % entries
 
 if len(newSWLBList) > 0:
-	outFile = "new-cmdb-sw-loadbalancers.csv"
+	outFile = "new-cmdb-loadbalancer_applications.csv"
 	fbus = open(outFile, "w")
-	fbustemplate = open("SW_Load_Balancer_Resource_Import_Template.csv")
+	fbustemplate = open("Load_Balancer_Application_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
@@ -660,7 +662,7 @@ if len(newSWLBList) > 0:
 		if generateLine(id, cols, fbus): entries += 1
 	fbus.close
 	if entries == 0: os.remove(outFile)
-	else: print "%d SW loadbalancers entries" % entries
+	else: print "%d Loadbalancer application entries" % entries
 
 if len(newBusServicesList) > 0:
 	outFile = "new-cmdb-service_offering.csv"

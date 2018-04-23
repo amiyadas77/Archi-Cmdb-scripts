@@ -114,13 +114,14 @@ opStatusName = "CMDB Operational Status"
 monitorObName = "CMDB Monitoring Object Id"
 monitorToolName = "CMDB Monitoring Tool"
 isMonitoredName	= "CMDB IsMonitored"
+isVirtualName = "CMDB IsVirtual"
 domainName = "CMDB Domain DNS"
 assetTagName = "CMDB Asset Tag"
 
 propNameSet = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
 					locationName, criticalityName, serviceClassName, installName, \
 					statusName, serialName, opStatusName, domainName, \
-					monitorObName, monitorToolName, isMonitoredName, assetTagName}
+					monitorObName, monitorToolName, isMonitoredName, assetTagName, isVirtualName}
 			
 propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": deviceTypeName, \
 					
@@ -130,7 +131,7 @@ propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": de
 					"Installation Path": installName, "Status": statusName, "Serial number": serialName, \
 					"Operational status": opStatusName, "DNS Domain": domainName, \
 					"Monitoring Object ID": monitorObName, "Monitoring Tool": monitorToolName, "Is Monitored": isMonitoredName, \
-					"Asset tag": assetTagName}
+					"Asset tag": assetTagName, "Is virtual": isVirtualName}
 
 propRevLookup = dict()
 for p in propLookup:

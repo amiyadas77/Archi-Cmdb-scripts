@@ -15,6 +15,7 @@ netrels=list() #List of tuples (parent, type, child, name)
 existingRels = dict() #Key = (parent, type, child), val = rel id
 existingProps = dict() #Keyed by node id + property name
 nodeDescByName = dict() #dict of node descriptions keyed by name
+classChange = dict() # Key = cmdbid val = (name, CMDB class, Archie class)
 
 appsList = list() # list of application ids
 serverList = list() # list of server ids
@@ -493,9 +494,10 @@ for lstr in fcmdb:
 				props[(nodeId, cmdbIdName)] = cmdbId
 			val = existingProps.get((nodeId, classPropName), '')
 			if cmdbClass != val:
-				props[(nodeId, classPropName)] = cmdbClass
+				#props[(nodeId, classPropName)] = cmdbClass
 				if val != '':
 					print "Warning: %s Cmdb class has changed: from %s to %s - not changing" % (name, val, cmdbClass)
+					classChange[cmdbId] = (name, cmdbClass, val)
 				else:
 					props[(nodeId, classPropName)] = cmdbClass
 			val = existingProps.get((nodeId, locationName), '')
@@ -815,3 +817,10 @@ for prop in props:
 	print >>fread, '"%s","%s","%s"' % (nodesById[prop[0]], prop[1], props[prop])
 fprops.close
 fread.close
+
+fclass = open("class-changes.csv", "w")
+print >> fclass, 'CMDB ID,Name,Old Class,New Class'
+for cmdbid in classChange:
+	(name, old, new) = classChange[cmdbid]
+	print >>fclass, "%s,%s,%s,%s" % (cmdbid, name, old, new)
+fclass.close

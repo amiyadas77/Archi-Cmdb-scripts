@@ -5,7 +5,7 @@
 #Add properties for CPU and Memory
 #If OS is different - reset in both description and property
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
-#Link + unlink to host ESXi server
+
 
 import sys
 import os
@@ -241,7 +241,7 @@ def processVInfo(cols, row):
 		osystem = ''
 	else:
 		osystem = row[osCol].value.strip()
-	host = row[cols[hostStr]].value.strip()
+	host = row[cols[hostStr]].value.strip().split('.')[0]
 	powered = row[cols[powerState]].value.strip()
 	fqdn = row[cols[dnsStr]].value.strip()
 	dnsName = fqdn.split('.')[0]

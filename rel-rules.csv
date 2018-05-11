@@ -31,7 +31,7 @@ cmdb_ci_appl,service_offering,RealizationRelationship,Depends on::Used by, False
 cmdb_ci_cluster,cmdb_ci_aix_server,CompositionRelationship,Members::Member of,TRUE
 cmdb_ci_cluster,cmdb_ci_appl,ServingRelationship,Depends on::Used by, False
 cmdb_ci_cluster,cmdb_ci_appl,RealizationRelationship,Depends on::Used by, False
-cmdb_ci_cluster,cmdb_ci_cluster,ServingRelationship,Depends on::Used by, False
+cmdb_ci_cluster,cmdb_ci_cluster,ServingRelationship,PASS-THRU, False
 cmdb_ci_cluster,cmdb_ci_db_instance,ServingRelationship,Depends on::Used by, False
 cmdb_ci_cluster,cmdb_ci_db_mssql_instance,ServingRelationship,Depends on::Used by, False
 cmdb_ci_cluster,cmdb_ci_db_ora_instance,ServingRelationship,Depends on::Used by, False
@@ -156,5 +156,6 @@ cmdb_ci_win_server,cmdb_ci_win_server,ServingRelationship,Depends on::Used by,FA
 cmdb_ci_win_server,service_offering,ServingRelationship,Depends on::Used by, False
 cmdb_ci_win_server,service_offering,RealizationRelationship,Depends on::Used by, False
 service_offering,cmdb_ci_appl,ServingRelationship,PASS-THRU,FALSE
+service_offering,cmdb_ci_appl,RealizationRelationship,PASS-THRU,FALSE
 service_offering,cmdb_ci_service,ServingRelationship,Depends on::Used by,FALSE
 service_offering,service_offering,ServingRelationship,Depends on::Used by, False

@@ -10,7 +10,6 @@ from cmdbconstants import *
 
 propsChanged = dict() #Keyed by id, set of all properties that have changed
 allPropsById = dict() #dict of dict of all properties found for a particular element keyed by its id  and the prop name
-rels=list() #List of tuples (parent, type, child, name)
 netrels=list() #List of tuples (parent, type, child, name)
 existingRels = dict() #Key = (parent, type, child), val = rel id
 existingProps = dict() #Keyed by node id + property name
@@ -226,6 +225,7 @@ for lstr in fcmdb:
 	elif classField == dbInstClass: cmdbClass = dbInstStr
 	elif classField == dbOraClass: cmdbClass = dbOraStr
 	elif classField == dbSQLClass: cmdbClass = dbSqlStr
+	elif classField == mySqlDbClass: cmdbClass = mySqlDbStr
 	elif classField == linuxClass: cmdbClass = linuxStr
 	elif classField == solarisClass: cmdbClass = solarisStr
 	elif classField == netClass: cmdbClass = netStr
@@ -347,7 +347,7 @@ for lstr in fnodes:
 				archieVal = existingProps.get((id, propName), None)
 				cmdbVal = cmdbProps.get((cmdbId, propName), None)
 				if archieVal is None or cmdbVal is None: continue
-				if archieVal.strip() != '' and archieVal.strip() != 'Unknown' and cmdbVal.strip() != archieVal.strip():
+				if archieVal.strip() != '' and archieVal.strip() != 'Unknown' and cmdbVal.strip().lower() != archieVal.strip().lower():
 					print "%s has a changed property: %s (Archi = %s, CMDB = %s" % (name, propName, archieVal, cmdbVal)
 					propsChanged[id].add(propName)
 	else:
@@ -453,6 +453,7 @@ for lstr in fcmdb:
 	elif classField == dbInstClass: cmdbClass = dbInstStr
 	elif classField == dbOraClass: cmdbClass = dbOraStr
 	elif classField == dbSQLClass: cmdbClass = dbSqlStr
+	elif classField == mySqlDbClass: cmdbClass = mySqlDbStr
 	elif classField == linuxClass: cmdbClass = linuxStr
 	elif classField == solarisClass: cmdbClass = solarisStr
 	elif classField == netClass: cmdbClass = netStr
@@ -488,10 +489,10 @@ for lstr in fcmdb:
 			val = existingProps.get((nodeId, cmdbIdName), '')
 			if cmdbId != val:
 				if val != '':
-					# print "Warning: %s Cmdb id has changed: from %s to %s - not changing" % (name, val, cmdbId)
-					print "Warning: %s Cmdb id has changed: from %s to %s" % (name, val, cmdbId)
-				# else:
-				props[(nodeId, cmdbIdName)] = cmdbId
+					print "Warning: %s Cmdb id has changed: from %s to %s - not changing. ***LOOK FOR DUPES***" % (name, val, cmdbId)
+					#print "Warning: %s Cmdb id has changed: from %s to %s" % (name, val, cmdbId)
+				else:
+					props[(nodeId, cmdbIdName)] = cmdbId
 			val = existingProps.get((nodeId, classPropName), '')
 			if cmdbClass != val:
 				#props[(nodeId, classPropName)] = cmdbClass
@@ -528,10 +529,10 @@ for lstr in fcmdb:
 			if status != '' and status != 'Unknown' and status != val:
 				props[(nodeId, statusName)] = status
 			val = existingProps.get((nodeId, isMonitoredName), '')
-			if isMonitored != '' and isMonitored != val:
+			if isMonitored != '' and isMonitored.lower() != val.lower():
 				props[(nodeId, isMonitoredName)] = isMonitored
 			val = existingProps.get((nodeId, monitorObName), '')
-			if monitoringObject != '' and monitoringObject != val:
+			if monitoringObject != '' and monitoringObject.lower() != val.lower():
 				props[(nodeId, monitorObName)] = monitoringObject
 			val = existingProps.get((nodeId, monitorToolName), '')
 			if monitoringTool != '' and monitoringTool != val:
@@ -637,7 +638,7 @@ if len(newClusterList) > 0:
 if len(newHWLBList) > 0:
 	outFile = "new-cmdb-loadbalancers.csv"
 	fbus = open(outFile, "w")
-	fbustemplate = open("Load_Balancer_Import_Template.csv")
+	fbustemplate = open("HW_Load_Balancer_Import_Template.csv")
 	for t in fbustemplate:
 		print >>fbus,t
 		cols = getPropList(t)
@@ -803,9 +804,9 @@ frels = open("new-relations.csv", "w")
 freadable = open("new-relations-readable.csv", "w")
 print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
 print >>freadable,'"Parent","Child","Relationship"'
-for rel in rels:
+for rel in netrels:
 	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
-	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
+	print >>freadable, '"%s","%s","%s","%s",%s"' % (rel[0], nodesById[rel[0]], rel[2], nodesById[rel[2]], rel[1])
 frels.close	
 
 fprops = open("new-properties.csv", "w")
@@ -814,7 +815,7 @@ print >>fprops,'"ID","Key","Value"'
 print >>fread,'"Name","Key","Value"'
 for prop in props:
 	print >>fprops, '"%s","%s","%s"' % (prop[0], prop[1], props[prop])
-	print >>fread, '"%s","%s","%s"' % (nodesById[prop[0]], prop[1], props[prop])
+	print >>fread, '"%s","%s","%s","%s"' % (prop[0], nodesById[prop[0]], prop[1], props[prop])
 fprops.close
 fread.close
 

@@ -22,7 +22,9 @@ allPropsById = dict() #dict of dict of all properties found for a particular ele
 nodesFirstName = dict() #id keyed by nodes first word
 nodeDescByName = dict() #dict of node descriptions keyed by name
 nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
-vmList = set() # set of VM ids in Archie
+vmSetRaw = set() #Set of VM ids found in Archie before removing unwanted ones (LPARs, etc)
+vmSet = set() # set of VM ids in Archie
+vmProcessed = list() # list of Vm names that have been processed
 
 sysSoftware = dict() #id keyed by systemsoftware
 hosts = dict()
@@ -144,17 +146,23 @@ for line in fprops:
 		else:
 			allPropsById[id] = dict()
 			allPropsById[id][name] = val
-		#CMDB Model = Virtual Machine or (CMDB Device Type = Virtual Server and CMDB Class != cmdb_ci_aix_server)  or CMDB Manufacturer = VMware)
+		#CMDB Model = Virtual Machine or CMDB Device Type = Virtual Server or CMDB Manufacturer = VMware)
 		if (name == deviceTypeName and val == "Virtual Server"):
-			cls = allPropsById[id].get(classPropName, '')
-			if cls != aixServerStr and cls != esxServerStr:
-				vmList.add(id)
-		elif (name == modelName and val == "Virtual Machine") or \
-			(name == manuName and val == "VMware"):
-			vmList.add(id)
-		if (name == classPropName and (val == aixServerStr or val == esxServerStr) and id in vmList): vmList.remove(id)  #Remove ESX + AIX servers from VM list
+			vmSetRaw.add(id)
+		elif (name == modelName and val == "Virtual Machine"):
+			vmSetRaw.add(id)
+		elif (name == manuName and val == "VMware"):
+			vmSetRaw.add(id)
 		lstr = ""
 fprops.close
+
+#Process vmSetRaw to filter out false positives
+for vmId in vmSetRaw:
+	#Check class to not include unwanted ones (not Vmware VMs)
+	cls = allPropsById[vmId].get(classPropName, '')
+	if cls != aixServerStr and cls != esxServerStr and cls != dbSqlStr:
+		#print "Adding VM: %s to list" % nodesById[vmId]
+		vmSet.add(vmId)
 
 #Load in subnets - can only be done once elements have been read
 loadSubnets()
@@ -245,21 +253,26 @@ def processVInfo(cols, row):
 	powered = row[cols[powerState]].value.strip()
 	fqdn = row[cols[dnsStr]].value.strip()
 	dnsName = fqdn.split('.')[0]
+	oldName = server
 	if fqdn != '' and dnsName.lower() != server.lower():
 		id = nodesByName.get(dnsName.lower())
 		if id is not None:
-			if id in vmList:
+			if id in vmSet:
 				#Remove found VM from list
-				vmList.remove(id)
+				vmSet.remove(id)
 			#Use dnsName rather than VM name as the Archi / CMDB name
 			print "WARNING: Server %s has a different DNS name: %s, using fqdn name" % (server,fqdn)
 			nameSwap[server] = dnsName
 			server = dnsName
+	if oldName in vmProcessed:
+		print "WARNING: SKIPPING Duplicate VM name - already processed %s" % oldName
+		return
+	vmProcessed.append(oldName)
 	cluster = row[cols[clStr]].value.strip()
 	cpus = "%d" % row[cols[cpuStr]].value
 	ram = "%d GB" % (row[cols[memoryStr]].value/1024)
 
-	#print server, osystem
+	#print server, powered, osystem
 	if fqdn == server: domain = "nie.co.uk" #Default to default domain
 	else:
 		parts = fqdn.split('.')
@@ -304,18 +317,24 @@ def processVInfo(cols, row):
 					props[(id, classPropName)] = "cmdb_ci_aix_server"
 				else:
 					props[(id, classPropName)] = "cmdb_ci_server"
-			if (id, deviceTypeName) not in existingProps:
+			if (id, deviceTypeName) not in existingProps \
+					or existingProps[(id, deviceTypeName)] != "Virtual Server":
 				props[(id, deviceTypeName)] = "Virtual Server"
-			if (id, osName) not in existingProps:
+			if osystem.strip() != '' and ((id, osName) not in existingProps \
+					or existingProps[(id, osName)] != osystem):
 				props[(id, osName)] = osystem
-			if (id, opStatusName) not in existingProps:
+			if (id, opStatusName) not in existingProps \
+					or existingProps[(id, opStatusName)] == "Powered Off" \
+					or existingProps[(id, opStatusName)] == "Disposed":
 				props[(id, opStatusName)] = "Live"
-			if (id, domainName) not in existingProps and domain != '':
+			if domain.strip() != '' and ((id, domainName) not in existingProps \
+					or existingProps[(id, domainName)] != domain):
 				props[(id, domainName)] = domain
-			if id in vmList:
-				#Remove found VM from list
-				vmList.remove(id)
-			else:
+			if id in vmSet:
+				#Remove found VM from set
+				#print "Found Vm %s with id %s" % (server, id)
+				vmSet.remove(id)
+			elif oldName == server: # Dont add props if using fqdn name
 				print "VM %s not in Archie Vm list - setting virtual server properties" % server
 				props[(id, deviceTypeName)] = "Virtual Server"
 				props[(id, modelName)] = "Virtual Machine"
@@ -358,11 +377,11 @@ def processVInfo(cols, row):
 	else:
 		if server.lower() in nodesByName:
 			id = nodesByName[server.lower()]
-			#Remove from Vmlist as its only poweredoff (and not decommissioned)
-			if id in vmList:
+			#Remove from vmSet as its only poweredoff (and not decommissioned)
+			if id in vmSet:
 				#Remove found VM from list
-				vmList.remove(id)
-			else:
+				vmSet.remove(id)
+			elif oldName == server: # Dont add props if using fqdn name
 				print "Powered off VM %s not in Archie Vm list - setting virtual server properties" % server
 				props[(id, deviceTypeName)] = "Virtual Server"
 				props[(id, modelName)] = "Virtual Machine"
@@ -444,9 +463,9 @@ for file in os.listdir('.'):
 			else:
 				processVNetwork(cols, row)
 
-#Proces remaining vmList - these are VMs that are not in RVtools and so should be marked as decommmissioned
+#Proces remaining vmSet - these are VMs that are not in RVtools and so should be marked as decommmissioned
 print "Processing Archi list of VMs - decommissioning ones that are not in RvTools"
-for id in vmList:
+for id in vmSet:
 	name = nodesById[id]
 	#print "%s server not in RVtools list - marking as decommissioned" % name
 	#Check Operational status

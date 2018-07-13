@@ -3,6 +3,7 @@
 
 #TODO 
 #Add properties for CPU and Memory
+#Dont set relationship with physical server but with the vCluster collaboration object
 #If OS is different - reset in both description and property
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
@@ -25,6 +26,7 @@ nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
 vmSetRaw = set() #Set of VM ids found in Archie before removing unwanted ones (LPARs, etc)
 vmSet = set() # set of VM ids in Archie
 vmProcessed = list() # list of Vm names that have been processed
+collabs = dict() #Dictionary of technical collaborations, keyed by name, value is ID 
 
 sysSoftware = dict() #id keyed by systemsoftware
 hosts = dict()
@@ -36,7 +38,10 @@ nets = dict()
 buss = dict()
 props = dict()
 softs = dict() #New syssoft to add
+newCollabs = dict() # New TechnologyCollaborations to add, keyed by Name, val is ID
 
+vCluster = "vCluster"
+clStr = "Cluster"
 vm = "VM"
 powerState = "Powerstate"
 dnsStr = "DNS Name"
@@ -46,7 +51,6 @@ ipStr = "IP Address"
 osStr = "OS"
 osTools = "OS according to the VMware Tools"
 hostStr = "Host"
-clStr = "Cluster"
 esxStr = "ESX Version"
 domainStr = "Domain"
 cpuModelStr = "CPU Model"
@@ -106,6 +110,8 @@ for lstr in fnodes:
 		nodesFirstName[firstName] = id
 	if nodeType == "SystemSoftware":
 		sysSoftware[name.lower()] = id
+	if nodeType == "TechnologyCollaboration":
+		collabs[name] = id
 	
 fnodes.close
 
@@ -174,6 +180,14 @@ def processVHost(cols, row):
 	domain = row[cols[domainStr]].value.strip()
 	esx = row[cols[esxStr]].value.strip()
 	cluster = row[cols[clStr]].value.strip()
+	if cluster != '':
+		vClust = "%s %s" % (cluster, vCluster)
+		clustId = collabs.get(vClust, newCollabs.get(vClust, None))
+		if clustId is None:
+			clustId = str(uuid.uuid4())
+			newCollabs[vClust] = clustId
+			nodesById[clustId] = vClust
+	else: clustId = None
 	serverModel = row[cols[modelStr]].value.strip()
 	cpuModel = row[cols[cpuModelStr]].value.strip()
 	cpus = "%d" % row[cols[noCPUStr]].value
@@ -193,6 +207,9 @@ def processVHost(cols, row):
 			props[(hostId, fnName)] = "ESX Server"
 		if (hostId, domainName) not in existingProps and domain != '':
 			props[(hostId, domainName)] = domain
+		if clustId is not None:
+			rel = (clustId, "CompositionRelationship", hostId)
+			if not (rel in existingRels): rels.append(rel)
 	else:
 		print "Found new vm host: " + host
 		docStr = "VM Host Server\nServer Model: " + serverModel
@@ -203,6 +220,8 @@ def processVHost(cols, row):
 		id = str(uuid.uuid4())
 		hosts[host] = (id, docStr)
 		nodesById[id] = host
+		if clustId is not None:
+			rels.append((clustId, "CompositionRelationship", hostId))
 		props[(id, classPropName)] = "cmdb_ci_esx_server"
 		props[(id, deviceTypeName)] = "Physical Server"
 		props[(id, osName)] = esx
@@ -269,6 +288,14 @@ def processVInfo(cols, row):
 		return
 	vmProcessed.append(oldName)
 	cluster = row[cols[clStr]].value.strip()
+	if cluster != '':
+		vClust = "%s %s" % (cluster, vCluster)
+		clustId = collabs.get(vClust, newCollabs.get(vClust, None))
+		if clustId is None:
+			clustId = str(uuid.uuid4())
+			newCollabs[vClust] = clustId
+			nodesById[clustId] = vClust
+	else: clustId = None
 	cpus = "%d" % row[cols[cpuStr]].value
 	ram = "%d GB" % (row[cols[memoryStr]].value/1024)
 
@@ -283,16 +310,19 @@ def processVInfo(cols, row):
 	#Skip VMs powered off
 	if powered != "poweredOff":
 		hostId = ""
-		if host in hosts :
-			hostId = hosts[host][0]
-		elif host in nodesByName :
-			hostId = nodesByName[host]
+		# if host in hosts :
+			# hostId = hosts[host][0]
+		# elif host in nodesByName :
+			# hostId = nodesByName[host]
 		if server.lower() in nodesByName:
 			server = server.lower()
 			id = nodesByName[server]
 			#Check relationships are set
-			if hostId != "":
-				rel = (hostId, "CompositionRelationship", nodesByName[server])
+			# if hostId != "":
+				# rel = (hostId, "CompositionRelationship", nodesByName[server])
+				# if not (rel in existingRels): rels.append(rel)
+			if clustId is not None:
+				rel = (clustId, "CompositionRelationship", nodesByName[server])
 				if not (rel in existingRels): rels.append(rel)
 			if osystem != '' :
 				if osystem.lower() not in sysSoftware:
@@ -346,8 +376,10 @@ def processVInfo(cols, row):
 			id = str(uuid.uuid4())
 			servers[server] = (id, docStr)
 			nodesById[id] = server
-			if hostId != "" :
-				rels.append((hostId, "CompositionRelationship", id))
+			if clustId is not None:
+				rels.append((clustId, "CompositionRelationship", id))
+			# if hostId != "" :
+				# rels.append((hostId, "CompositionRelationship", id))
 			if "windows" in osystem.lower():
 				props[(id, classPropName)] = "cmdb_ci_win_server"
 			elif "linux" in osystem.lower():

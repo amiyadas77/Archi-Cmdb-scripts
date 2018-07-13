@@ -159,7 +159,7 @@ for line in fprops:
 			elif val == rackStr: rackList.append(id)
 			elif val == lbhwStr: hwlbList.append(id)
 			elif val == lbswStr: swlbList.append(id)
-			elif val == netgearStr  or val == fwStr: netgearList.append(id)
+			elif val == netgearStr or val == ipRouterStr or val == fwStr: netgearList.append(id)
 			elif val == subnetStr or val == groupStr: pass
 			else: print "Not accounted for cmdb class: %s\n" % val
 		lstr = ""
@@ -215,38 +215,10 @@ for lstr in fcmdb:
 	#if opStatus == "Decommissioned": continue
 	cmdbClass = ''
 	if classField == "Computer" or classField == "Printer": continue
-	if classField == appClass: cmdbClass = appStr
-	elif classField == busServiceClass: cmdbClass = businessStr
-	elif classField == busOfferingClass: cmdbClass = busOfferStr
-	elif classField == serverClass: cmdbClass = serverStr
-	elif classField == esxServerClass: cmdbClass = esxServerStr
-	elif classField == aixServerClass: cmdbClass = aixServerStr
-	elif classField == dbClass: cmdbClass = dbStr
-	elif classField == dbInstClass: cmdbClass = dbInstStr
-	elif classField == dbOraClass: cmdbClass = dbOraStr
-	elif classField == dbSQLClass: cmdbClass = dbSqlStr
-	elif classField == mySqlDbClass: cmdbClass = mySqlDbStr
-	elif classField == linuxClass: cmdbClass = linuxStr
-	elif classField == solarisClass: cmdbClass = solarisStr
-	elif classField == netClass: cmdbClass = netStr
-	elif classField == winClass: cmdbClass = winStr
-	elif classField == storageServerClass: cmdbClass = storageServerStr
-	elif classField == storageDevClass: cmdbClass = storageDevStr
-	elif classField == sanSwitchClass: cmdbClass = sanSwitchStr
-	elif classField == sanFabricClass: cmdbClass = sanFabricStr
-	elif classField == sanClass: cmdbClass = sanStr
-	elif classField == containerClass: cmdbClass = containerStr
-	elif classField == vmwareClass: cmdbClass = vmwareStr
-	elif classField == vmClass: cmdbClass = vmStr
-	elif classField == vcenterClass: cmdbClass = vcenterStr
-	elif classField == clusterClass: cmdbClass = clusterStr
-	elif classField == rackClass: cmdbClass = rackStr
-	elif classField == lbhwClass: cmdbClass = lbhwStr
-	elif classField == lbswClass: cmdbClass = lbswStr
-	elif classField == fwClass: cmdbClass = fwStr
-	else : 
+	cmdbClass = convertClassToStr(classField)
+	if cmdbClass == None:
 		print "WARNING: (Snow read 1) CMDB name %s: Unrecognised CMDB class field: %s - ignoring entry" % (name, classField)
-	if cmdbClass != '':
+	if cmdbClass != None:
 		cmdb[name] = cmdbId
 		cmdbProps[(cmdbId, classPropName)] = cmdbClass
 		for propName in propNameSet:
@@ -256,31 +228,6 @@ for lstr in fcmdb:
 				val = fields[col].strip()
 				if propName == manuName: val = val.strip("(Manufacturer)").strip()
 				cmdbProps[(cmdbId, propName)] = val
-		# ipAddr = fields[cols[propRevLookup[ipName]]].strip()
-		# if ipAddr != '': 
-			# cmdbProps[(cmdbId, ipName)] = ipAddr
-			# subnet = ('0', '0', '0')
-			# subnet = findSubnet(val)		
-		# if status != '' : cmdbProps[(cmdbId, statusName)] = status
-		# if opStatus != '' : cmdbProps[(cmdbId, opStatusName)] = opStatus
-		# deviceType = fields[cols[propRevLookup[deviceTypeName]]].strip()
-		# if deviceType != '': cmdbProps[(cmdbId, deviceTypeName)] = deviceType
-		# funType = fields[cols[propRevLookup[fnName]]].strip()
-		# if funType != '': cmdbProps[(cmdbId, fnName)] = funType
-		# location = fields[cols[propRevLookup[locationName]]]
-		# if location != '': cmdbProps[(cmdbId, locationName)] = location
-		# model = fields[cols[propRevLookup[modelName]]].strip()
-		# if model != '' : cmdbProps[(cmdbId, modelName)] = model
-		# isMonitored = fields[cols[propRevLookup[isMonitoredName]]].strip()
-		# if isMonitored != '' : cmdbProps[(cmdbId, isMonitoredName)] = isMonitored
-		# monitoringObject = fields[cols[propRevLookup[monitorObName]]].strip()
-		# if monitoringObject != '' : cmdbProps[(cmdbId, monitorObName)] = monitoringObject
-		# monitoringTool = fields[cols[propRevLookup[monitorToolName]]].strip()
-		# if monitoringTool != '' : cmdbProps[(cmdbId, monitorToolName)] = monitoringTool
-		# serial = fields[cols[propRevLookup[serialName]]].strip()
-		# if serial != '' : cmdbProps[(cmdbId, serialName)] = serial
-		# assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
-		# if assetTag != '' : cmdbProps[(cmdbId, assetTagName)] = assetTag
 
 fcmdb.close
 
@@ -434,45 +381,19 @@ for lstr in fcmdb:
 	monitoringTool = fields[cols[propRevLookup[monitorToolName]]].strip()
 	opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
 	serial = fields[cols[propRevLookup[serialName]]].strip()
-	assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
-	
+	#assetTag = fields[cols[propRevLookup[assetTagName]]].strip()
+	i = cols.get(propRevLookup[assetTagName], -1)
+	if i != -1: assetTag = fields[i].strip() 
+	else: assetTag = ''
+
 	#skip dev/test / retired / EUC
 	if classField == computerClass or classField == printerClass : continue #Ignore all EUC devices
 	#if status == "Retired": continue
 	#if opStatus == "Decommissioned": continue
 	if "#DECOM" in name: continue
-	#if classField == appClass: continue #lots of system sofware in the CMDB, not just apps
-
-	if classField == appClass: cmdbClass = appStr
-	elif classField == busServiceClass: cmdbClass = businessStr
-	elif classField == busOfferingClass: cmdbClass = busOfferStr
-	elif classField == serverClass: cmdbClass = serverStr
-	elif classField == esxServerClass: cmdbClass = esxServerStr
-	elif classField == aixServerClass: cmdbClass = aixServerStr
-	elif classField == dbClass: cmdbClass = dbStr
-	elif classField == dbInstClass: cmdbClass = dbInstStr
-	elif classField == dbOraClass: cmdbClass = dbOraStr
-	elif classField == dbSQLClass: cmdbClass = dbSqlStr
-	elif classField == mySqlDbClass: cmdbClass = mySqlDbStr
-	elif classField == linuxClass: cmdbClass = linuxStr
-	elif classField == solarisClass: cmdbClass = solarisStr
-	elif classField == netClass: cmdbClass = netStr
-	elif classField == winClass: cmdbClass = winStr
-	elif classField == storageServerClass: cmdbClass = storageServerStr
-	elif classField == storageDevClass: cmdbClass = storageDevStr
-	elif classField == sanSwitchClass: cmdbClass = sanSwitchStr
-	elif classField == sanFabricClass: cmdbClass = sanFabricStr
-	elif classField == sanClass: cmdbClass = sanStr
-	elif classField == containerClass: cmdbClass = containerStr
-	elif classField == vmwareClass: cmdbClass = vmwareStr
-	elif classField == vmClass: cmdbClass = vmStr
-	elif classField == vcenterClass: cmdbClass = vcenterStr
-	elif classField == clusterClass: cmdbClass = clusterStr
-	elif classField == rackClass: cmdbClass = rackStr
-	elif classField == lbhwClass: cmdbClass = lbhwStr
-	elif classField == lbswClass: cmdbClass = lbswStr
-	elif classField == fwClass: cmdbClass = fwStr
-	else : 
+	
+	cmdbClass = convertClassToStr(classField)
+	if cmdbClass == None:
 		print "WARNING: (Snow create) CMDB id %s, name %s: Unrecognised CMDB class field: %s - ignoring entry" % (cmdbId, name, classField)
 		continue
 #	if lowerName in nodesByName or lowerName in nodesFirstName or firstName in nodesByName: 
@@ -562,8 +483,11 @@ for lstr in fcmdb:
 							or classField == vmClass or classField == vmwareClass or classField == vcenterClass\
 							or classField == winClass or classField == linuxClass:
 			servers[name] = (nodeId, dstr.strip('"'))
-		elif classField == dbClass: apps[name] = (nodeId, dstr.strip('"'))
-		elif classField == netClass or classField == storageDevClass or classField == storageServerClass: devs[name] = (nodeId, dstr.strip('"'))
+		elif classField == dbClass or classField == dbInstClass \
+				or classField == dbOraClass or classField == dbSQLClass \
+				or classField == mySqlDbClass: 
+			apps[name] = (nodeId, dstr.strip('"'))
+		elif classField == netClass or classField == ipRouterClass or classField == storageDevClass or classField == storageServerClass: devs[name] = (nodeId, dstr.strip('"'))
 		else : 
 			print "WARNING: (create) CMDB name %s: Unrecognised CMDB class field: %s - cannot add new node" % (name, classField)
 			continue				
@@ -812,7 +736,7 @@ frels.close
 fprops = open("new-properties.csv", "w")
 fread = open("new-properties-readable.csv", "w")
 print >>fprops,'"ID","Key","Value"'
-print >>fread,'"Name","Key","Value"'
+print >>fread,'"ID", "Name","Key","Value"'
 for prop in props:
 	print >>fprops, '"%s","%s","%s"' % (prop[0], prop[1], props[prop])
 	print >>fread, '"%s","%s","%s","%s"' % (prop[0], nodesById[prop[0]], prop[1], props[prop])

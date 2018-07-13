@@ -32,25 +32,26 @@ businessStr = "cmdb_ci_service"
 busServiceClass = "Business Service"
 busOfferStr = "service_offering"
 busOfferingClass = "Service Offering"
-serverStr = "cmdb_ci_server"
-serverClass = "Server"
-esxServerStr = "cmdb_ci_esx_server"
-esxServerClass = "ESX Server"
-aixServerStr = "cmdb_ci_aix_server"
-aixServerClass = "AIX Server"
+
 dbStr = "cmdb_ci_database"
 dbClass = "Database"
 dbInstStr = "cmdb_ci_db_instance"
 dbInstClass = "Database Instance"
 dbOraStr = "cmdb_ci_db_ora_instance"
 dbOraClass = "Oracle Instance"
-
 dbSqlStr = "cmdb_ci_db_mssql_instance"
 dbSQLClass = "MSFT SQL Instance"
 db2DbStr = "cmdb_ci_db_db2_instance"
 mySqlDbClass = "MySQL Instance"
 mySqlDbStr = "cmdb_ci_db_mysql_instance"
 sybDbStr = "cmdb_ci_db_syb_instance"
+
+serverStr = "cmdb_ci_server"
+serverClass = "Server"
+esxServerStr = "cmdb_ci_esx_server"
+esxServerClass = "ESX Server"
+aixServerStr = "cmdb_ci_aix_server"
+aixServerClass = "AIX Server"
 linuxClass = "Linux Server"
 linuxStr = "cmdb_ci_linux_server"
 solarisClass = "Solaris Server"
@@ -59,6 +60,7 @@ netClass = "Network Gear"
 netStr = "cmdb_ci_netgear"
 winClass = "Windows Server"
 winStr = "cmdb_ci_win_server"
+
 storageDevClass = "Storage Device"
 storageDevStr = "cmdb_ci_storage_device"
 storageServerClass = "Storage Server"
@@ -71,13 +73,18 @@ sanClass = "Storage Area Network"
 sanStr = "cmdb_ci_san"
 containerClass = "Storage Container Object"
 containerStr = "cmdb_ci_container_object"
+
 netgearStr = "cmdb_ci_netgear"
+ipRouterStr = "cmdb_ci_ip_router"
+ipRouterClass = "IP Router"
 subnetStr = "cmdb_ci_subnet"
 lbhwStr = "cmdb_ci_lb"
 lbhwClass = "Load Balancer"
 lbswStr = "cmdb_ci_lb_appl"
 lbswClass = "Load Balancer Application"
-groupStr = "cmdb_ci_group"
+fwStr = "cmdb_ci_ip_firewall"
+fwClass = "IP Firewall"
+
 vcenterClass = "VMware vCenter Instance"
 vcenterStr = "cmdb_ci_vcenter"
 vmwareClass = "VMware Virtual Machine Instance"
@@ -89,8 +96,7 @@ clusterStr = "cmdb_ci_cluster"
 clusterClass = "Cluster"
 rackStr = "cmdb_ci_rack"
 rackClass = "Rack"
-fwStr = "cmdb_ci_ip_firewall"
-fwClass = "IP Firewall"
+groupStr = "cmdb_ci_group"
 
 classPropName = "CMDB Class"
 cmdbIdName = "CMDB ID"
@@ -137,6 +143,19 @@ propLookup = {"Unique ID": cmdbIdName, "Class": classPropName, "Device Type": de
 propRevLookup = dict()
 for p in propLookup:
 	propRevLookup[propLookup[p]] = p
+	
+classLookup = {appClass: appStr, busServiceClass: businessStr, busOfferingClass: busOfferStr,\
+	serverClass: serverStr, esxServerClass: esxServerStr, aixServerClass: aixServerStr, \
+	dbClass: dbStr,	dbInstClass: dbInstStr, dbOraClass: dbOraStr, dbSQLClass: dbSqlStr, \
+	mySqlDbClass: mySqlDbStr, linuxClass: linuxStr, solarisClass: solarisStr, netClass: netStr, \
+	winClass: winStr, storageServerClass: storageServerStr, storageDevClass: storageDevStr, \
+	sanSwitchClass: sanSwitchStr, sanFabricClass: sanFabricStr, sanClass: sanStr, \
+	containerClass: containerStr, vmwareClass: vmwareStr, vmClass: vmStr, vcenterClass: vcenterStr, \
+	clusterClass: clusterStr, rackClass: rackStr, lbhwClass: lbhwStr, lbswClass: lbswStr, \
+	fwClass: fwStr, ipRouterClass: ipRouterStr }
+
+def convertClassToStr(cls) :
+	return classLookup.get(cls)
 	
 #Process header line and return a dict keyed by column name, with value of field number	
 def processHeader(headerLine):

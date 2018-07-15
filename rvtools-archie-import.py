@@ -2,15 +2,14 @@
 #Author: Danny Andersen
 
 #TODO 
-#Add properties for CPU and Memory
-#Dont set relationship with physical server but with the vCluster collaboration object
-#If OS is different - reset in both description and property
+#Add attached disks + sizes + usage
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
 
 import sys
 import os
 import uuid
+import io
 
 import xlrd
 from cmdbconstants import *
@@ -27,6 +26,7 @@ vmSetRaw = set() #Set of VM ids found in Archie before removing unwanted ones (L
 vmSet = set() # set of VM ids in Archie
 vmProcessed = list() # list of Vm names that have been processed
 collabs = dict() #Dictionary of technical collaborations, keyed by name, value is ID 
+addedIPAlready = dict() # keyed by server name, true if already added an IP address - this means it should be added, not replaced.
 
 sysSoftware = dict() #id keyed by systemsoftware
 hosts = dict()
@@ -39,14 +39,16 @@ buss = dict()
 props = dict()
 softs = dict() #New syssoft to add
 newCollabs = dict() # New TechnologyCollaborations to add, keyed by Name, val is ID
+cpusByVM = dict() # no of cpus keyed by VM name
+powerStateByServer = dict() # Powered state by server name
 
-vCluster = "vCluster"
 clStr = "Cluster"
 vm = "VM"
 powerState = "Powerstate"
 dnsStr = "DNS Name"
 cpuStr = "CPUs"
 memoryStr = "Memory"
+sizeMemoryStr = "Size MB"
 ipStr = "IP Address"
 osStr = "OS"
 osTools = "OS according to the VMware Tools"
@@ -58,6 +60,7 @@ modelStr = "Model"
 noCPUStr = "# CPU"
 noCoresStr = "# Cores"
 noMemory = "# Memory"
+networkStr = "Network"
 
 # rvToolsLookup = {cpuStr: cpuName, memoryStr: memName, \
 					# osStr: osName, ipStr: ipName }
@@ -100,7 +103,7 @@ for lstr in fnodes:
 	#nodesByName[name] = id
 	nodesById[id] = name
 	nodesByName[lowerName] = id
-	nodeDescByName[lowerName] = desc
+	nodeDescByName[lowerName] = unicode(desc, "ascii", errors='ignore')
 	firstName = ''
 	if nodeType == "Node" and "(" in name: 
 		firstName = lowerName.split(" ")[0]
@@ -181,11 +184,15 @@ def processVHost(cols, row):
 	esx = row[cols[esxStr]].value.strip()
 	cluster = row[cols[clStr]].value.strip()
 	if cluster != '':
-		vClust = "%s %s" % (cluster, vCluster)
-		clustId = collabs.get(vClust, newCollabs.get(vClust, None))
+		vClust = "%s %s" % (cluster, "vCluster")
+		clustId = collabs.get(vClust, None)
+		if clustId is None:
+			collab = newCollabs.get(vClust, None)
+			if collab is not None:
+				clustId = collab[0]
 		if clustId is None:
 			clustId = str(uuid.uuid4())
-			newCollabs[vClust] = clustId
+			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
 			nodesById[clustId] = vClust
 	else: clustId = None
 	serverModel = row[cols[modelStr]].value.strip()
@@ -233,6 +240,7 @@ def processVNetwork(cols, row):
 	if server in nameSwap: server = nameSwap[server]
 	ipAddr = row[cols[ipStr]].value.strip()
 	powered = row[cols[powerState]].value.strip()
+	network = row[cols[networkStr]].value.strip()
 	#print server, ipAddr
 	if powered != "poweredOff" and ipAddr != "unknown":
 		if ':' or ',' in ipAddr:
@@ -243,21 +251,22 @@ def processVNetwork(cols, row):
 				if '.' in f:
 					ipAddr = f.strip()
 					break
-		subnet = ('0', '0', '0')
 		if ipAddr != '' : 
+			subnet = ('0', '0', '0')
 			subnet = findSubnet(ipAddr)
-			if server.lower() not in nodesByName:
-				#New server - add in IP addr to desc
-				(id, docStr) = servers[server]
-				docStr += "\nIP Address: " + ipAddr
-				servers[server] = (id, docStr)
-			else:
-				id = nodesByName[server.lower()]
+			id = nodesByName[server.lower()]
+			rel = (id, "AssociationRelationship", subnet[0])
+			if subnet[0] != "0" and rel not in existingRels:
+				#print "Adding new netrel: " + ipAddr
+				netrels.append((id, "AssociationRelationship", subnet[0], ipAddr))
 			if ipAddr != '' and (id, ipName) not in existingProps:
 				props[(id, ipName)] = ipAddr
-			rel = (id, "AssociationRelationship", subnet[0])
-			if subnet[0] != "0" and rel not in existingRels: 
-				netrels.append((id, "AssociationRelationship", subnet[0], ipAddr))
+			if network != '': docStr = "IP Address (%s): %s" % (network, ipAddr)
+			else: docStr = "IP Address: %s" % (ipAddr)
+			#print network, docStr
+			#Look for IP address already in desc and replace
+			replaceDocStr(server, docStr, addedIPAlready.get(server, False), lambda line: ("IP Address" in line))
+			addedIPAlready[server] = True
 
 #Process row in spreadsheet
 def processVInfo(cols, row):
@@ -289,13 +298,18 @@ def processVInfo(cols, row):
 	vmProcessed.append(oldName)
 	cluster = row[cols[clStr]].value.strip()
 	if cluster != '':
-		vClust = "%s %s" % (cluster, vCluster)
-		clustId = collabs.get(vClust, newCollabs.get(vClust, None))
+		vClust = "%s %s" % (cluster, "vCluster")
+		clustId = collabs.get(vClust, None)
+		if clustId is None:
+			collab = newCollabs.get(vClust, None)
+			if collab is not None:
+				clustId = collab[0]
 		if clustId is None:
 			clustId = str(uuid.uuid4())
-			newCollabs[vClust] = clustId
+			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
 			nodesById[clustId] = vClust
 	else: clustId = None
+	powerStateByServer[server] = powered
 	cpus = "%d" % row[cols[cpuStr]].value
 	ram = "%d GB" % (row[cols[memoryStr]].value/1024)
 
@@ -315,14 +329,16 @@ def processVInfo(cols, row):
 		# elif host in nodesByName :
 			# hostId = nodesByName[host]
 		if server.lower() in nodesByName:
-			server = server.lower()
-			id = nodesByName[server]
+			id = nodesByName[server.lower()]
+			docStr = "%s vCPU %s RAM" % (cpus, ram)
+			#Look for CPU desc already in
+			replaceDocStr(server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
 			#Check relationships are set
 			# if hostId != "":
 				# rel = (hostId, "CompositionRelationship", nodesByName[server])
 				# if not (rel in existingRels): rels.append(rel)
 			if clustId is not None:
-				rel = (clustId, "CompositionRelationship", nodesByName[server])
+				rel = (clustId, "CompositionRelationship", nodesByName[server.lower()])
 				if not (rel in existingRels): rels.append(rel)
 			if osystem != '' :
 				if osystem.lower() not in sysSoftware:
@@ -375,7 +391,9 @@ def processVInfo(cols, row):
 			docStr += "\nvCluster: " + cluster
 			id = str(uuid.uuid4())
 			servers[server] = (id, docStr)
+			nodeDescByName[server.lower()] = docStr
 			nodesById[id] = server
+			nodesByName[server.lower()] = id
 			if clustId is not None:
 				rels.append((clustId, "CompositionRelationship", id))
 			# if hostId != "" :
@@ -429,13 +447,59 @@ def processVInfo(cols, row):
 				servers[server] = (id, newDesc)
 			monitored = existingProps.get((id, isMonitoredName), None)
 			if monitored.lower() == "true" : props[(id, isMonitoredName)] = "FALSE"
-				
+
+def processVCPU(cols, row):
+	server = row[cols[vm]].value.strip()
+	if server in nameSwap: server = nameSwap[server]
+	cpusByVM[server] = row[cols[cpuStr]].value
+
+def processVMemory(cols, row):
+	server = row[cols[vm]].value.strip()
+	if server in nameSwap: server = nameSwap[server]
+	powered = powerStateByServer[server]
+	if powered != "poweredOff":
+		ram = "%d GB" % (row[cols[sizeMemoryStr]].value/1024)
+		cpus = "%d" % cpusByVM[server]
+		desc = nodeDescByName[server.lower()].strip('"')
+		docStr = "%s vCPU %s RAM" % (cpus, ram)
+		#Look for CPU desc already in
+		replaceDocStr(server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
+		
 def rowToCsv(row):
 	out = ""
 	for c in row:
-		out += str(c.value)
+		out += unicode(c.value).encode("ascii")
 		out += ","
 	return out
+
+def replaceDocStr(server, docStr, addedAlready, matchFn):
+	#print server, docStr
+	if server in servers:
+		(id, desc) = servers[server]
+	else:
+		desc = str(nodeDescByName[server.lower()].strip('"'))
+		id = nodesByName[server.lower()]
+	#docStr = unicode(docStr,'ascii', 'ignore')
+	#desc = unicode(desc, 'utf-8', errors='ignore')
+	#desc = desc.encode('ascii', 'ignore')
+	if docStr not in desc:
+		#Amend or add to desc
+		lines = desc.split("\n")
+		if addedAlready:
+			#Another entry = dont replace, add new
+			desc += "\n" + docStr
+			servers[server] = (id, desc)
+		else:
+			replaced = False
+			newDesc = ""
+			for line in lines:
+				if matchFn(line): 
+					newDesc += docStr + "\n"
+					replaced = True
+				else: newDesc += line + "\n"
+			if not replaced: newDesc += "\n" + docStr
+			#print "Change:", id, newDesc
+			servers[server] = (id, str(newDesc))
 
 #Process each RVTools workbook
 for file in os.listdir('.'):
@@ -477,6 +541,40 @@ for file in os.listdir('.'):
 				#print cols
 			else:
 				processVInfo(cols, row)
+		#Process VM CPU info
+		# try:
+			# ws = wb.sheet_by_name('tabvCPU')
+		# except xlrd.XLRDError as x:
+			# try:
+				# ws = wb.sheet_by_name('vCPU')
+			# except xlrd.XLRDError as x:
+				# print "Error reading Workbook %s: %s" % (file, x)
+				# continue
+		# count = 0
+		# for row in ws.get_rows():
+			# count += 1
+			# if count == 1:
+				# rowCsv = rowToCsv(row)
+				# cols = processHeader(rowCsv)
+			# else:
+				# processVCPU(cols, row)
+		# #Process VM Memory info
+		# try:
+			# ws = wb.sheet_by_name('tabvMemory')
+		# except xlrd.XLRDError as x:
+			# try:
+				# ws = wb.sheet_by_name('vMemory')
+			# except xlrd.XLRDError as x:
+				# print "Error reading Workbook %s: %s" % (file, x)
+				# continue
+		# count = 0
+		# for row in ws.get_rows():
+			# count += 1
+			# if count == 1:
+				# rowCsv = rowToCsv(row)
+				# cols = processHeader(rowCsv)
+			# else:
+				# processVMemory(cols, row)
 		#Process VM network info
 		try:
 			ws = wb.sheet_by_name('tabvNetwork')
@@ -501,7 +599,7 @@ for id in vmSet:
 	name = nodesById[id]
 	#print "%s server not in RVtools list - marking as decommissioned" % name
 	#Check Operational status
-	if name.startswith("NIE-TH-TLG") or name.startswith("redhat90") or name.lower().startswith("srv-hps-nie-ercgb"): continue  # Ignore tooling server until it is managed by the cloud team
+	if name.startswith("NIE-TH-TLG") or name.lower().startswith("redhat90") or name.lower().startswith("srv-hps-nie-ercgb"): continue  # Ignore tooling server until it is managed by the cloud team
 	state = existingProps.get((id, opStatusName), None)
 	if state != "Disposed" and state != "Decommissioned":
 		print "Setting %s to Disposed" % name
@@ -515,10 +613,12 @@ for id in vmSet:
 	
 
 felems = open("new-elements.csv", "w")
+#felems = io.open("new-elements.csv", "w", encoding="ascii")
 print >>felems,'"ID","Type","Name","Documentation"'
 for h in hosts:
 	print >>felems,'"%s","Node","%s","%s"' % (hosts[h][0],h,hosts[h][1])
 for s in servers:
+	#print s, servers[s][0]
 	print >>felems,'"%s","Node","%s","%s"' % (servers[s][0],s, servers[s][1])
 for a in apps:
 	print >>felems,'"%s","ApplicationComponent","%s","%s"' % (apps[a][0], a, apps[a][1])
@@ -530,13 +630,19 @@ for b in buss:
 	print >>felems,'"%s","BusinessService","%s","%s"' % (buss[b][0], b, buss[b][1])
 for s in softs:
 	print >>felems,'"%s","SystemSoftware","%s","%s"' % (softs[s][0], s, softs[s][1])
-	
+for c in newCollabs:
+	print >>felems,'"%s","TechnologyCollaboration","%s","%s"' % (newCollabs[c][0], c, newCollabs[c][1])
 felems.close
+
 frels = open("new-relations.csv", "w")
 freadable = open("new-relations-readable.csv", "w")
 print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
 print >>freadable,'"Parent","Child","Relationship"'
 for rel in rels:
+	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
+	#print rel
+	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
+for rel in netrels:
 	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
 	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
 frels.close	

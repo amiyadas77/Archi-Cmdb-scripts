@@ -258,7 +258,9 @@ def processVNetwork(cols, row):
 			rel = (id, "AssociationRelationship", subnet[0])
 			if subnet[0] != "0" and rel not in existingRels:
 				#print "Adding new netrel: " + ipAddr
-				netrels.append((id, "AssociationRelationship", subnet[0], ipAddr))
+				if network != '': netDesc = "Network: " + network
+				else: netDesc = ''
+				netrels.append((id, "AssociationRelationship", subnet[0], ipAddr, netDesc))
 			if ipAddr != '' and (id, ipName) not in existingProps:
 				props[(id, ipName)] = ipAddr
 			if network != '': docStr = "IP Address (%s): %s" % (network, ipAddr)
@@ -311,7 +313,9 @@ def processVInfo(cols, row):
 	else: clustId = None
 	powerStateByServer[server] = powered
 	cpus = "%d" % row[cols[cpuStr]].value
-	ram = "%d GB" % (row[cols[memoryStr]].value/1024)
+	ramVal = row[cols[memoryStr]].value
+	if ramVal < 1024: ram = "%d MB" % (ramVal)
+	else: ram = "%d GB" % (ramVal/1024)
 
 	#print server, powered, osystem
 	if fqdn == server: domain = "nie.co.uk" #Default to default domain
@@ -341,6 +345,9 @@ def processVInfo(cols, row):
 				rel = (clustId, "CompositionRelationship", nodesByName[server.lower()])
 				if not (rel in existingRels): rels.append(rel)
 			if osystem != '' :
+				docStr = "Operating System: %s" % (osystem)
+				#Look for OS desc already in
+				replaceDocStr(server, docStr, False, lambda line: ("Operating System" in line))
 				if osystem.lower() not in sysSoftware:
 					#Add OS to system software
 					osid = str(uuid.uuid4())
@@ -484,20 +491,22 @@ def replaceDocStr(server, docStr, addedAlready, matchFn):
 	#desc = desc.encode('ascii', 'ignore')
 	if docStr not in desc:
 		#Amend or add to desc
+		desc = desc.replace('\r', '\n')
 		lines = desc.split("\n")
 		if addedAlready:
 			#Another entry = dont replace, add new
-			desc += "\n" + docStr
+			if desc.endswith('\n') : desc += docStr + "\n"
+			else: desc += "\n" + docStr
 			servers[server] = (id, desc)
 		else:
 			replaced = False
 			newDesc = ""
 			for line in lines:
-				if matchFn(line): 
+				if matchFn(line):
 					newDesc += docStr + "\n"
 					replaced = True
-				else: newDesc += line + "\n"
-			if not replaced: newDesc += "\n" + docStr
+				elif line != '' and line != '\n' : newDesc += line + "\n"
+			if not replaced: newDesc += docStr + "\n"
 			#print "Change:", id, newDesc
 			servers[server] = (id, str(newDesc))
 
@@ -643,8 +652,8 @@ for rel in rels:
 	#print rel
 	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
 for rel in netrels:
-	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
-	print >>freadable, '"%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1])
+	print >>frels, '"","%s","%s","%s","%s","%s"' % (rel[1], rel[3], rel[4], rel[0], rel[2])
+	print >>freadable, '"%s","%s","%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1], rel[3], rel[4])
 frels.close	
 
 

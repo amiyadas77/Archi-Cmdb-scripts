@@ -729,8 +729,8 @@ freadable = open("new-relations-readable.csv", "w")
 print >>frels,'"ID","Type","Name","Documentation","Source","Target"'
 print >>freadable,'"Parent","Child","Relationship"'
 for rel in netrels:
-	print >>frels, '"","%s","","","%s","%s"' % (rel[1], rel[0], rel[2])
-	print >>freadable, '"%s","%s","%s","%s",%s"' % (rel[0], nodesById[rel[0]], rel[2], nodesById[rel[2]], rel[1])
+	print >>frels, '"","%s","%s","","%s","%s"' % (rel[1], rel[3], rel[0], rel[2])
+	print >>freadable, '"%s","%s","%s","%s","%s","%s"' % (rel[0], nodesById[rel[0]], rel[2], nodesById[rel[2]], rel[1], rel[3])
 frels.close	
 
 fprops = open("new-properties.csv", "w")

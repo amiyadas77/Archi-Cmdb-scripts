@@ -3,8 +3,8 @@
 
 #TODO 
 #Add attached disks + sizes + usage
+#Set CPU and Mem as CMDB props?
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
-
 
 import sys
 import os
@@ -178,8 +178,10 @@ loadSubnets()
 
 def processVHost(cols, row):
 	host = row[cols[hostStr]].value.strip().split('.')[0]
-	if host.lower() == "nie-omat-01" or host.lower() == "nie-omat-02":
+	lowerHost = host.lower()
+	if lowerHost == "nie-omat-01" or lowerHost == "nie-omat-02":
 		host += " (PHY)"
+		lowerHost = host.lower()
 	domain = row[cols[domainStr]].value.strip()
 	esx = row[cols[esxStr]].value.strip()
 	cluster = row[cols[clStr]].value.strip()
@@ -201,7 +203,6 @@ def processVHost(cols, row):
 	cores = "%d" % row[cols[noCoresStr]].value
 	ram = "%d GB" % (row[cols[noMemory]].value/1024)
 
-	lowerHost = host.lower()
 	if lowerHost in nodesByName:
 		hostId = nodesByName[lowerHost]
 		if (hostId, classPropName) not in existingProps:
@@ -228,7 +229,7 @@ def processVHost(cols, row):
 		hosts[host] = (id, docStr)
 		nodesById[id] = host
 		if clustId is not None:
-			rels.append((clustId, "CompositionRelationship", hostId))
+			rels.append((clustId, "CompositionRelationship", id))
 		props[(id, classPropName)] = "cmdb_ci_esx_server"
 		props[(id, deviceTypeName)] = "Physical Server"
 		props[(id, osName)] = esx
@@ -238,6 +239,9 @@ def processVNetwork(cols, row):
 	#Find subnet
 	server = row[cols[vm]].value.strip()
 	if server in nameSwap: server = nameSwap[server]
+	if lowerName == "nie-ctx-sso-01": 
+		print "NOTE: Skipping server %s as duplicate" % server
+		return
 	ipAddr = row[cols[ipStr]].value.strip()
 	powered = row[cols[powerState]].value.strip()
 	network = row[cols[networkStr]].value.strip()
@@ -273,6 +277,19 @@ def processVNetwork(cols, row):
 #Process row in spreadsheet
 def processVInfo(cols, row):
 	server = row[cols[vm]].value.strip()
+	lowerName = server.lower()
+	if ("nie-th-tm-" in lowerName or "nie-dg-tm-" in lowerName) and "-0" not in lowerName : 
+		newName = server.replace('01',  "-01")
+		newName = newName.replace('02',  "-02")
+		nameSwap[server] = newName
+		server = newName
+	if lowerName == "nie-ctx-sso-01": 
+		print "NOTE: Skipping server %s as duplicate" % server
+		return
+	if lowerName == "nie-ctx-sso-01_new": 
+		newName = "NIE-CTX-SSO-01"
+		nameSwap[server] = newName
+		server = newName
 	osCol = cols.get(osStr, cols.get(osTools))
 	if osCol is None: 
 		print "Failed to find OS column"

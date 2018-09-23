@@ -3,7 +3,7 @@
 
 #TODO 
 #Add attached disks + sizes + usage
-#Set CPU and Mem as CMDB props?
+#Sum up CPUs, Memory for each vCluster and add to /replace in vCluster description
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
 import sys
@@ -29,6 +29,7 @@ collabs = dict() #Dictionary of technical collaborations, keyed by name, value i
 addedIPAlready = dict() # keyed by server name, true if already added an IP address - this means it should be added, not replaced.
 
 sysSoftware = dict() #id keyed by systemsoftware
+clusterStats = dict() # cluster stats by name. Tuple of (used cpu cores, used cpu Ghz, used memory, total cores, effective GHz, effective Mem)
 hosts = dict()
 servers = dict()
 apps = dict()
@@ -43,11 +44,19 @@ cpusByVM = dict() # no of cpus keyed by VM name
 powerStateByServer = dict() # Powered state by server name
 
 clStr = "Cluster"
+nameStr = "Name"
+numHostsStr = "NumHosts"
+numCoresStr = "NumCpuCores"
+effCpuGStr = "Effective Cpu"
+effMemGStr = "Effective Memory"
 vm = "VM"
 powerState = "Powerstate"
 dnsStr = "DNS Name"
 cpuStr = "CPUs"
+overAllStr = "Overall"
+maxStr = "Max"
 memoryStr = "Memory"
+consumedStr = "Consumed"
 sizeMemoryStr = "Size MB"
 ipStr = "IP Address"
 osStr = "OS"
@@ -176,15 +185,12 @@ for vmId in vmSetRaw:
 #Load in subnets - can only be done once elements have been read
 loadSubnets()
 
-def processVHost(cols, row):
-	host = row[cols[hostStr]].value.strip().split('.')[0]
-	lowerHost = host.lower()
-	if lowerHost == "nie-omat-01" or lowerHost == "nie-omat-02":
-		host += " (PHY)"
-		lowerHost = host.lower()
-	domain = row[cols[domainStr]].value.strip()
-	esx = row[cols[esxStr]].value.strip()
-	cluster = row[cols[clStr]].value.strip()
+def processVCluster(cols, ros):
+	cluster = row[cols[nameStr]].value.strip()
+	numHosts = row[cols[numHostsStr]].value
+	numCores = row[cols[numCoresStr]].value
+	effCpuG = row[cols[effCpuGStr]].value
+	effMemG = row[cols[effMemGStr]].value
 	if cluster != '':
 		vClust = "%s %s" % (cluster, "vCluster")
 		clustId = collabs.get(vClust, None)
@@ -196,7 +202,41 @@ def processVHost(cols, row):
 			clustId = str(uuid.uuid4())
 			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
 			nodesById[clustId] = vClust
-	else: clustId = None
+			print "Found new vCluster: %s" % vClust
+		clusterStats[vClust] = (0,0,0, numCores, effCpuG, effMemG)
+		docStr = "Num of Hosts: %d" % int(numHosts)
+		replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Num of Hosts" in line))
+		docStr = "Total CPU Cores: %d" % int(numCores)
+		replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Num of Cores" in line))
+		docStr = "Effective CPU: %.1f GHz" % (effCpuG / 1024)
+		replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Effective CPU" in line))
+		docStr = "Effective Memory: %.1f GB" % (effMemG / 1024)
+		replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Effective Memory" in line))
+
+def processVHost(cols, row):
+	host = row[cols[hostStr]].value.strip().split('.')[0]
+	lowerHost = host.lower()
+	if lowerHost == "nie-omat-01" or lowerHost == "nie-omat-02":
+		host += " (PHY)"
+		lowerHost = host.lower()
+	domain = row[cols[domainStr]].value.strip()
+	esx = row[cols[esxStr]].value.strip()
+	cluster = row[cols[clStr]].value.strip()
+	clustId = None
+	if cluster != '':
+		vClust = "%s %s" % (cluster, "vCluster")
+		if vClust not in clusterStats:
+			clusterStats[vClust] = (0,0,0,0,0,0)
+		clustId = collabs.get(vClust, None)
+		if clustId is None:
+			collab = newCollabs.get(vClust, None)
+			if collab is not None:
+				clustId = collab[0]
+		if clustId is None:
+			clustId = str(uuid.uuid4())
+			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
+			nodesById[clustId] = vClust
+			print "Found new vCluster: %s" % vClust
 	serverModel = row[cols[modelStr]].value.strip()
 	cpuModel = row[cols[cpuModelStr]].value.strip()
 	cpus = "%d" % row[cols[noCPUStr]].value
@@ -271,7 +311,7 @@ def processVNetwork(cols, row):
 			else: docStr = "IP Address: %s" % (ipAddr)
 			#print network, docStr
 			#Look for IP address already in desc and replace
-			replaceDocStr(server, docStr, addedIPAlready.get(server, False), lambda line: ("IP Address" in line))
+			replaceDocStr(servers, server, docStr, addedIPAlready.get(server, False), lambda line: ("IP Address" in line))
 			addedIPAlready[server] = True
 
 #Process row in spreadsheet
@@ -353,7 +393,7 @@ def processVInfo(cols, row):
 			id = nodesByName[server.lower()]
 			docStr = "%s vCPU %s RAM" % (cpus, ram)
 			#Look for CPU desc already in
-			replaceDocStr(server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
+			replaceDocStr(servers, server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
 			#Check relationships are set
 			# if hostId != "":
 				# rel = (hostId, "CompositionRelationship", nodesByName[server])
@@ -364,7 +404,7 @@ def processVInfo(cols, row):
 			if osystem != '' :
 				docStr = "Operating System: %s" % (osystem)
 				#Look for OS desc already in
-				replaceDocStr(server, docStr, False, lambda line: ("Operating System" in line))
+				replaceDocStr(servers, server, docStr, False, lambda line: ("Operating System" in line))
 				if osystem.lower() not in sysSoftware:
 					#Add OS to system software
 					osid = str(uuid.uuid4())
@@ -475,19 +515,25 @@ def processVInfo(cols, row):
 def processVCPU(cols, row):
 	server = row[cols[vm]].value.strip()
 	if server in nameSwap: server = nameSwap[server]
-	cpusByVM[server] = row[cols[cpuStr]].value
+	powered = powerStateByServer[server]
+	if powered != "poweredOff":
+		cluster = row[cols[clStr]].value.strip()
+		vClust = "%s %s" % (cluster, "vCluster")
+		cpus = row[cols[cpuStr]].value
+		cpuGHz = row[cols[maxStr]].value
+		stats = clusterStats[vClust]
+		clusterStats[vClust] = (stats[0] + cpus, stats[1] + cpuGHz, stats[2], stats[3], stats[4], stats[5])
 
 def processVMemory(cols, row):
 	server = row[cols[vm]].value.strip()
 	if server in nameSwap: server = nameSwap[server]
 	powered = powerStateByServer[server]
 	if powered != "poweredOff":
-		ram = "%d GB" % (row[cols[sizeMemoryStr]].value/1024)
-		cpus = "%d" % cpusByVM[server]
-		desc = nodeDescByName[server.lower()].strip('"')
-		docStr = "%s vCPU %s RAM" % (cpus, ram)
-		#Look for CPU desc already in
-		replaceDocStr(server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
+		cluster = row[cols[clStr]].value.strip()
+		vClust = "%s %s" % (cluster, "vCluster")
+		ram = row[cols[sizeMemoryStr]].value
+		stats = clusterStats[vClust]
+		clusterStats[vClust] = (stats[0], stats[1], stats[2] + ram, stats[3], stats[4], stats[5])
 		
 def rowToCsv(row):
 	out = ""
@@ -496,13 +542,16 @@ def rowToCsv(row):
 		out += ","
 	return out
 
-def replaceDocStr(server, docStr, addedAlready, matchFn):
-	#print server, docStr
-	if server in servers:
-		(id, desc) = servers[server]
+#Find description against the node and replace it. 
+#Arguments: <dict containing new / changed nodes with the value (id, desc)>,<name of node containing desc>, <New Str to add or replace>, 
+#		<Whether to just add line to desc>, <Function to determine if line matches> 
+def replaceDocStr(nodes, nodeName, docStr, addNew, matchFn):
+	#print nodeName, docStr
+	if nodeName in nodes:
+		(id, desc) = nodes[nodeName]
 	else:
-		desc = str(nodeDescByName[server.lower()].strip('"'))
-		id = nodesByName[server.lower()]
+		desc = str(nodeDescByName[nodeName.lower()].strip('"'))
+		id = nodesByName[nodeName.lower()]
 	#docStr = unicode(docStr,'ascii', 'ignore')
 	#desc = unicode(desc, 'utf-8', errors='ignore')
 	#desc = desc.encode('ascii', 'ignore')
@@ -510,11 +559,11 @@ def replaceDocStr(server, docStr, addedAlready, matchFn):
 		#Amend or add to desc
 		desc = desc.replace('\r', '\n')
 		lines = desc.split("\n")
-		if addedAlready:
+		if addNew:
 			#Another entry = dont replace, add new
 			if desc.endswith('\n') : desc += docStr + "\n"
 			else: desc += "\n" + docStr
-			servers[server] = (id, desc)
+			nodes[nodeName] = (id, desc)
 		else:
 			replaced = False
 			newDesc = ""
@@ -525,14 +574,33 @@ def replaceDocStr(server, docStr, addedAlready, matchFn):
 				elif line != '' and line != '\n' : newDesc += line + "\n"
 			if not replaced: newDesc += docStr + "\n"
 			#print "Change:", id, newDesc
-			servers[server] = (id, str(newDesc))
+			nodes[nodeName] = (id, str(newDesc))
 
 #Process each RVTools workbook
 for file in os.listdir('.'):
 	if file.startswith("RVTools_") and (file.endswith(".xls") or file.endswith(".xlsx")):
 		print "Processing RVtools file %s" % file
 		wb = xlrd.open_workbook(file)
+		#Process Vmware Clusters
+		ws = None
+		try:
+			ws = wb.sheet_by_name('tabvCluster')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vCluster')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+				else:
+					processVCluster(cols, row)
 		#Process Vmware hosts
+		ws = None
 		try:
 			ws = wb.sheet_by_name('tabvHost')
 		except xlrd.XLRDError as x:
@@ -540,16 +608,17 @@ for file in os.listdir('.'):
 				ws = wb.sheet_by_name('vHost')
 			except xlrd.XLRDError as x:
 				print "Error reading Workbook %s: %s" % (file, x)
-				continue
-		count = 0
-		for row in ws.get_rows():
-			count += 1
-			if count == 1:
-				rowCsv = rowToCsv(row)
-				cols = processHeader(rowCsv)
-			else:
-				processVHost(cols, row)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+				else:
+					processVHost(cols, row)
 		#Process VMs
+		ws = None
 		try:
 			ws = wb.sheet_by_name('tabvInfo')
 		except xlrd.XLRDError as x:
@@ -557,51 +626,54 @@ for file in os.listdir('.'):
 				ws = wb.sheet_by_name('vInfo')
 			except xlrd.XLRDError as x:
 				print "Error reading Workbook %s: %s" % (file, x)
-				continue
-		count = 0
-		for row in ws.get_rows():
-			count += 1
-			if count == 1:
-				rowCsv = rowToCsv(row)
-				cols = processHeader(rowCsv)
-				#print cols
-			else:
-				processVInfo(cols, row)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+					#print cols
+				else:
+					processVInfo(cols, row)
 		#Process VM CPU info
-		# try:
-			# ws = wb.sheet_by_name('tabvCPU')
-		# except xlrd.XLRDError as x:
-			# try:
-				# ws = wb.sheet_by_name('vCPU')
-			# except xlrd.XLRDError as x:
-				# print "Error reading Workbook %s: %s" % (file, x)
-				# continue
-		# count = 0
-		# for row in ws.get_rows():
-			# count += 1
-			# if count == 1:
-				# rowCsv = rowToCsv(row)
-				# cols = processHeader(rowCsv)
-			# else:
-				# processVCPU(cols, row)
-		# #Process VM Memory info
-		# try:
-			# ws = wb.sheet_by_name('tabvMemory')
-		# except xlrd.XLRDError as x:
-			# try:
-				# ws = wb.sheet_by_name('vMemory')
-			# except xlrd.XLRDError as x:
-				# print "Error reading Workbook %s: %s" % (file, x)
-				# continue
-		# count = 0
-		# for row in ws.get_rows():
-			# count += 1
-			# if count == 1:
-				# rowCsv = rowToCsv(row)
-				# cols = processHeader(rowCsv)
-			# else:
-				# processVMemory(cols, row)
+		ws = None
+		try:
+			ws = wb.sheet_by_name('tabvCPU')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vCPU')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+				else:
+					processVCPU(cols, row)
+		#Process VM Memory info
+		ws = None
+		try:
+			ws = wb.sheet_by_name('tabvMemory')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vMemory')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+				else:
+					processVMemory(cols, row)
 		#Process VM network info
+		ws = None
 		try:
 			ws = wb.sheet_by_name('tabvNetwork')
 		except xlrd.XLRDError as x:
@@ -609,16 +681,49 @@ for file in os.listdir('.'):
 				ws = wb.sheet_by_name('vNetwork')
 			except xlrd.XLRDError as x:
 				print "Error reading Workbook %s: %s" % (file, x)
-				continue
-		count = 0
-		for row in ws.get_rows():
-			count += 1
-			if count == 1:
-				rowCsv = rowToCsv(row)
-				cols = processHeader(rowCsv)
-			else:
-				processVNetwork(cols, row)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+				else:
+					processVNetwork(cols, row)
 
+#Process vCluster stats
+for vClust in clusterStats:
+	stats = clusterStats[vClust]
+	if stats[3] != 0: 
+		freeCores = int(stats[3] - stats[0])
+		if freeCores < 0:
+			#Overallocation
+			docStr = "Used Cores: %d, Overallocation ratio: %0.1f" % (int(stats[0]), stats[0]/stats[3])
+		else:
+			docStr = "Used Cores: %d, Free Cores: %s" % (int(stats[0]), freeCores)
+	else: 
+		docStr = "Used Cores: %d" % (int(stats[0]))
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Cores:" in line))	
+	if stats[4] != 0: 
+		freeGig = (stats[4] - stats[1])/1024
+		if freeGig < 0.0:
+			#Overallocation
+			docStr = "Used CPU: %0.1f GHz, CPU Overallocation ratio: %0.1f" % (stats[1]/1024, stats[1]/stats[4])
+		else:
+			docStr = "Used CPU: %0.1f GHz, Free CPU: %0.1f GHz" % (stats[1]/1024, freeGig)
+	else:
+		docStr = "Used CPU: %0.1f GHz" % (stats[1]/1024)
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used CPU:" in line))	
+	if stats[5] != 0:
+		freeMem = (stats[5] - stats[2])/1024
+		if freeMem < 0:
+			docStr = "Used Memory: %0.1f GB, **Overallocation of: %0.1f GB" % (stats[2]/1024, -freeMem)
+		else:
+			docStr = "Used Memory: %0.1f GB, Free Memory: %0.1f GB" % (stats[2]/1024, freeMem)
+	else: 
+		docStr = "Used Memory: %0.1f GB" % (stats[2]/1024)
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Memory:" in line))	
+	
 #Proces remaining vmSet - these are VMs that are not in RVtools and so should be marked as decommmissioned
 print "Processing Archi list of VMs - decommissioning ones that are not in RvTools"
 for id in vmSet:

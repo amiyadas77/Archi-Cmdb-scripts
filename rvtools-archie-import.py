@@ -3,7 +3,6 @@
 
 #TODO 
 #Add attached disks + sizes + usage
-#Sum up CPUs, Memory for each vCluster and add to /replace in vCluster description
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
 import sys
@@ -29,7 +28,7 @@ collabs = dict() #Dictionary of technical collaborations, keyed by name, value i
 addedIPAlready = dict() # keyed by server name, true if already added an IP address - this means it should be added, not replaced.
 
 sysSoftware = dict() #id keyed by systemsoftware
-clusterStats = dict() # cluster stats by name. Tuple of (used cpu cores, used cpu Ghz, used memory, total cores, effective GHz, effective Mem)
+clusterStats = dict() # cluster stats by name. Tuple of (used cpu cores, used cpu Ghz, used memory, total cores, effective GHz, effective Mem, no of VMs)
 hosts = dict()
 servers = dict()
 apps = dict()
@@ -203,7 +202,7 @@ def processVCluster(cols, ros):
 			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
 			nodesById[clustId] = vClust
 			print "Found new vCluster: %s" % vClust
-		clusterStats[vClust] = (0,0,0, numCores, effCpuG, effMemG)
+		clusterStats[vClust] = (0,0,0, numCores, effCpuG, effMemG, 0)
 		docStr = "Num of Hosts: %d" % int(numHosts)
 		replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Num of Hosts" in line))
 		docStr = "Total CPU Cores: %d" % int(numCores)
@@ -226,7 +225,7 @@ def processVHost(cols, row):
 	if cluster != '':
 		vClust = "%s %s" % (cluster, "vCluster")
 		if vClust not in clusterStats:
-			clusterStats[vClust] = (0,0,0,0,0,0)
+			clusterStats[vClust] = (0,0,0,0,0,0,0)
 		clustId = collabs.get(vClust, None)
 		if clustId is None:
 			collab = newCollabs.get(vClust, None)
@@ -522,7 +521,7 @@ def processVCPU(cols, row):
 		cpus = row[cols[cpuStr]].value
 		cpuGHz = row[cols[maxStr]].value
 		stats = clusterStats[vClust]
-		clusterStats[vClust] = (stats[0] + cpus, stats[1] + cpuGHz, stats[2], stats[3], stats[4], stats[5])
+		clusterStats[vClust] = (stats[0] + cpus, stats[1] + cpuGHz, stats[2], stats[3], stats[4], stats[5], stats[6]+1)
 
 def processVMemory(cols, row):
 	server = row[cols[vm]].value.strip()
@@ -533,7 +532,7 @@ def processVMemory(cols, row):
 		vClust = "%s %s" % (cluster, "vCluster")
 		ram = row[cols[sizeMemoryStr]].value
 		stats = clusterStats[vClust]
-		clusterStats[vClust] = (stats[0], stats[1], stats[2] + ram, stats[3], stats[4], stats[5])
+		clusterStats[vClust] = (stats[0], stats[1], stats[2] + ram, stats[3], stats[4], stats[5], stats[6])
 		
 def rowToCsv(row):
 	out = ""
@@ -723,6 +722,14 @@ for vClust in clusterStats:
 	else: 
 		docStr = "Used Memory: %0.1f GB" % (stats[2]/1024)
 	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Memory:" in line))	
+	numVms = float(stats[6])
+	docStr = "No of VMs: %d\nAverage VM Size: " % numVms
+	if stats[0] != 0 and numVms != 0:
+		docStr += "%0.1f vCPUs " % (stats[0]/numVms)
+	if stats[2] != 0 and numVms != 0:
+		docStr += "%0.1f GB RAM " % ((stats[2]/1024)/numVms)
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("No of VMs:" in line))	
+
 	
 #Proces remaining vmSet - these are VMs that are not in RVtools and so should be marked as decommmissioned
 print "Processing Archi list of VMs - decommissioning ones that are not in RvTools"

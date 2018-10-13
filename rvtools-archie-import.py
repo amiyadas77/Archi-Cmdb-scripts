@@ -2,7 +2,6 @@
 #Author: Danny Andersen
 
 #TODO 
-#Add attached disks + sizes + usage
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
 import sys
@@ -69,6 +68,11 @@ noCPUStr = "# CPU"
 noCoresStr = "# Cores"
 noMemory = "# Memory"
 networkStr = "Network"
+diskStr = "Disk"
+capStr = "Capacity MB"
+consumedStr = "Consumed MB"
+freeStr = "Free MB"
+freepStr = "Free %"
 
 # rvToolsLookup = {cpuStr: cpuName, memoryStr: memName, \
 					# osStr: osName, ipStr: ipName }
@@ -533,7 +537,31 @@ def processVMemory(cols, row):
 		ram = row[cols[sizeMemoryStr]].value
 		stats = clusterStats[vClust]
 		clusterStats[vClust] = (stats[0], stats[1], stats[2] + ram, stats[3], stats[4], stats[5], stats[6])
-		
+
+def processVPartition(cols, row):
+	server = row[cols[vm]].value.strip()
+	if server in nameSwap: server = nameSwap[server]
+	powered = powerStateByServer[server]
+	if powered != "poweredOff":
+		disk = row[cols[diskStr]].value.strip()
+		capacityVal = row[cols[capStr]].value
+		if capacityVal < 1024: capacity = "%d MB" % (capacityVal)
+		else: capacity = "%d GB" % (capacityVal/1024)
+		freeVal = row[cols[freeStr]].value
+		if freeVal < 1024: free = "%d MB" % (freeVal)
+		else: free = "%d GB" % (freeVal/1024)
+		freeperc = row[cols[freepStr]].value
+		if consumedStr in cols:
+			consumedVal = row[cols[consumedStr]].value
+			if consumedVal < 1024: consumed = "%d MB" % (consumedVal)
+			else: consumed = "%d GB" % (consumedVal/1024)
+			docStr = "Disk: %s Size: %s Consumed: %s Free: %s (%d%%)" % (disk, capacity, consumed, free, freeperc)
+		else:
+			docStr = "Disk: %s Size: %s Free: %s (%d%%)" % (disk, capacity, free, freeperc)
+		#Look for Disk desc already in desc
+		newDiskStr = "Disk %s" % disk
+		replaceDocStr(servers, server, docStr, False, lambda line: (newDiskStr in line))
+
 def rowToCsv(row):
 	out = ""
 	for c in row:
@@ -653,6 +681,24 @@ for file in os.listdir('.'):
 					cols = processHeader(rowCsv)
 				else:
 					processVCPU(cols, row)
+		#Process VM Disk info
+		ws = None
+		try:
+			ws = wb.sheet_by_name('tabvPartition')
+		except xlrd.XLRDError as x:
+			try:
+				ws = wb.sheet_by_name('vPartition')
+			except xlrd.XLRDError as x:
+				print "Error reading Workbook %s: %s" % (file, x)
+		if ws is not None:
+			count = 0
+			for row in ws.get_rows():
+				count += 1
+				if count == 1:
+					rowCsv = rowToCsv(row)
+					cols = processHeader(rowCsv)
+				else:
+					processVPartition(cols, row)
 		#Process VM Memory info
 		ws = None
 		try:

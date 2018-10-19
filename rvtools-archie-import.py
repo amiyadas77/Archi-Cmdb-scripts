@@ -370,7 +370,9 @@ def processVInfo(cols, row):
 			clustId = str(uuid.uuid4())
 			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
 			nodesById[clustId] = vClust
-	else: clustId = None
+	else: 
+		clustId = None
+		vClust = ''
 	powerStateByServer[server] = powered
 	cpus = "%d" % row[cols[cpuStr]].value
 	ramVal = row[cols[memoryStr]].value
@@ -404,6 +406,9 @@ def processVInfo(cols, row):
 			if clustId is not None:
 				rel = (clustId, "CompositionRelationship", nodesByName[server.lower()])
 				if not (rel in existingRels): rels.append(rel)
+				docStr = "%s" % (vClust)
+				#Look for Cluster desc already in
+				replaceDocStr(servers, server, docStr, False, lambda line: (line.startswith('Cluster') or "vCluster" in line))
 			if osystem != '' :
 				docStr = "Operating System: %s" % (osystem)
 				#Look for OS desc already in
@@ -455,7 +460,7 @@ def processVInfo(cols, row):
 		else :
 			docStr = "Vmware VM\nOperating System: " + osystem
 			docStr += "\n%s vCPU %s RAM" % (cpus, ram)
-			docStr += "\nvCluster: " + cluster
+			docStr += "\n" + vClust
 			id = str(uuid.uuid4())
 			servers[server] = (id, docStr)
 			nodeDescByName[server.lower()] = docStr

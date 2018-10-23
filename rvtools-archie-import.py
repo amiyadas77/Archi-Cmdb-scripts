@@ -564,7 +564,7 @@ def processVPartition(cols, row):
 		else:
 			docStr = "Disk: %s Size: %s Free: %s (%d%%)" % (disk, capacity, free, freeperc)
 		#Look for Disk desc already in desc
-		newDiskStr = "Disk %s" % disk
+		newDiskStr = "Disk: %s" % disk
 		replaceDocStr(servers, server, docStr, False, lambda line: (newDiskStr in line))
 
 def rowToCsv(row):

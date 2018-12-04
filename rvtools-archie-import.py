@@ -2,6 +2,7 @@
 #Author: Danny Andersen
 
 #TODO 
+#Process vDatastore tab - associate Datastores to cluster summary through hosts and datastore usage, free 
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
 import sys
@@ -321,11 +322,11 @@ def processVNetwork(cols, row):
 def processVInfo(cols, row):
 	server = row[cols[vm]].value.strip()
 	lowerName = server.lower()
-	if ("nie-th-tm-" in lowerName or "nie-dg-tm-" in lowerName) and "-0" not in lowerName : 
-		newName = server.replace('01',  "-01")
-		newName = newName.replace('02',  "-02")
-		nameSwap[server] = newName
-		server = newName
+	# if ("nie-th-tm-" in lowerName or "nie-dg-tm-" in lowerName) and "-0" not in lowerName : 
+		# newName = server.replace('01',  "-01")
+		# newName = newName.replace('02',  "-02")
+		# nameSwap[server] = newName
+		# server = newName
 	if lowerName == "nie-ctx-sso-01": 
 		print "NOTE: Skipping server %s as duplicate" % server
 		return
@@ -522,7 +523,9 @@ def processVInfo(cols, row):
 
 def processVCPU(cols, row):
 	server = row[cols[vm]].value.strip()
-	if server in nameSwap: server = nameSwap[server]
+	if server in nameSwap: 
+		#print "Server %s swap to %s" % (server, nameSwap[server])
+		server = nameSwap[server]
 	powered = powerStateByServer[server]
 	if powered != "poweredOff":
 		cluster = row[cols[clStr]].value.strip()
@@ -564,7 +567,7 @@ def processVPartition(cols, row):
 		else:
 			docStr = "Disk: %s Size: %s Free: %s (%d%%)" % (disk, capacity, free, freeperc)
 		#Look for Disk desc already in desc
-		newDiskStr = "Disk: %s" % disk
+		newDiskStr = "Disk: %s Size" % disk
 		replaceDocStr(servers, server, docStr, False, lambda line: (newDiskStr in line))
 
 def rowToCsv(row):
@@ -774,12 +777,14 @@ for vClust in clusterStats:
 		docStr = "Used Memory: %0.1f GB" % (stats[2]/1024)
 	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Memory:" in line))	
 	numVms = float(stats[6])
-	docStr = "No of VMs: %d\nAverage VM Size: " % numVms
+	docStr = "No of VMs: %d\n" % numVms
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("No of VMs:" in line))	
+	docStr = "Average VM Size: "
 	if stats[0] != 0 and numVms != 0:
 		docStr += "%0.1f vCPUs " % (stats[0]/numVms)
 	if stats[2] != 0 and numVms != 0:
 		docStr += "%0.1f GB RAM " % ((stats[2]/1024)/numVms)
-	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("No of VMs:" in line))	
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Average VM Size:" in line))	
 
 	
 #Proces remaining vmSet - these are VMs that are not in RVtools and so should be marked as decommmissioned

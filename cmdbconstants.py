@@ -156,6 +156,14 @@ classLookup = {appClass: appStr, busServiceClass: businessStr, busOfferingClass:
 
 def convertClassToStr(cls) :
 	return classLookup.get(cls)
+
+#Process xls row to csv string
+def rowToCsv(row):
+	out = ""
+	for c in row:
+		out += unicode(c.value).encode("ascii")
+		out += ","
+	return out
 	
 #Process header line and return a dict keyed by column name, with value of field number	
 def processHeader(headerLine):

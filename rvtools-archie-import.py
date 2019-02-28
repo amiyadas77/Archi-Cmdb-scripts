@@ -570,12 +570,6 @@ def processVPartition(cols, row):
 		newDiskStr = "Disk: %s Size" % disk
 		replaceDocStr(servers, server, docStr, False, lambda line: (newDiskStr in line))
 
-def rowToCsv(row):
-	out = ""
-	for c in row:
-		out += unicode(c.value).encode("ascii")
-		out += ","
-	return out
 
 #Find description against the node and replace it. 
 #Arguments: <dict containing new / changed nodes with the value (id, desc)>,<name of node containing desc>, <New Str to add or replace>, 

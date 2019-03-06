@@ -125,6 +125,9 @@ isVirtualName = "CMDB IsVirtual"
 domainName = "CMDB Domain DNS"
 assetTagName = "CMDB Asset Tag"
 
+eolDateName = "EoL Date"
+eoslDateName = "EoSL Date"
+
 propNameSet = {classPropName, deviceTypeName, osName, fnName, ipName, manuName, modelName, \
 					locationName, criticalityName, serviceClassName, installName, \
 					statusName, serialName, opStatusName, domainName, \

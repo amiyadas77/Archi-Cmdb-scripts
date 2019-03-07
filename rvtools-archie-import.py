@@ -20,12 +20,13 @@ existingProps = dict() #Keyed by node id + property name
 allPropsById = dict() #dict of dict of all properties found for a particular element keyed by its id  and the prop name
 nodesFirstName = dict() #id keyed by nodes first word
 nodeDescByName = dict() #dict of node descriptions keyed by name
-nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
 vmSetRaw = set() #Set of VM ids found in Archie before removing unwanted ones (LPARs, etc)
 vmSet = set() # set of VM ids in Archie
-vmProcessed = list() # list of Vm names that have been processed
 collabs = dict() #Dictionary of technical collaborations, keyed by name, value is ID 
 addedIPAlready = dict() # keyed by server name, true if already added an IP address - this means it should be added, not replaced.
+
+nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
+vmProcessed = list() # list of Vm names that have been processed in file
 
 sysSoftware = dict() #id keyed by systemsoftware
 clusterStats = dict() # cluster stats by name. Tuple of (used cpu cores, used cpu Ghz, used memory, total cores, effective GHz, effective Mem, no of VMs)
@@ -263,7 +264,7 @@ def processVHost(cols, row):
 			rel = (clustId, "CompositionRelationship", hostId)
 			if not (rel in existingRels): rels.append(rel)
 	else:
-		print "Found new vm host: " + host
+		print "------> Found new vm host: " + host
 		docStr = "VM Host Server\nServer Model: " + serverModel
 		docStr += "\nOperating System: " + esx 
 		docStr += "\nProcessor: " + cpuModel
@@ -321,6 +322,7 @@ def processVNetwork(cols, row):
 #Process row in spreadsheet
 def processVInfo(cols, row):
 	server = row[cols[vm]].value.strip()
+	#print "Processing %s" % server
 	lowerName = server.lower()
 	# if ("nie-th-tm-" in lowerName or "nie-dg-tm-" in lowerName) and "-0" not in lowerName : 
 		# newName = server.replace('01',  "-01")
@@ -523,6 +525,7 @@ def processVInfo(cols, row):
 
 def processVCPU(cols, row):
 	server = row[cols[vm]].value.strip()
+	#print "Server %s in swap %s" % (server, server in nameSwap)
 	if server in nameSwap: 
 		#print "Server %s swap to %s" % (server, nameSwap[server])
 		server = nameSwap[server]
@@ -607,8 +610,11 @@ def replaceDocStr(nodes, nodeName, docStr, addNew, matchFn):
 
 #Process each RVTools workbook
 for file in os.listdir('.'):
-	if file.startswith("RVTools_") and (file.endswith(".xls") or file.endswith(".xlsx")):
-		print "Processing RVtools file %s" % file
+	#Reset working arrays
+	nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
+	vmProcessed = list() # list of Vm names that have been processed in file
+	if "RVTools" in file and (file.endswith(".xls") or file.endswith(".xlsx")):
+		print "********************** Processing RVtools file %s" % file
 		wb = xlrd.open_workbook(file)
 		#Process Vmware Clusters
 		ws = None

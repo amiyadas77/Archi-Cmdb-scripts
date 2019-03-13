@@ -157,8 +157,15 @@ classLookup = {appClass: appStr, busServiceClass: businessStr, busOfferingClass:
 	clusterClass: clusterStr, rackClass: rackStr, lbhwClass: lbhwStr, lbswClass: lbswStr, \
 	fwClass: fwStr, ipRouterClass: ipRouterStr }
 
+revClassLookup = dict()
+for c in classLookup:
+	revClassLookup[classLookup[c]] = c
+	
+serverClasses = {serverStr, esxServerStr, aixServerStr, linuxStr, solarisStr, winStr}
+
 def convertClassToStr(cls) :
 	return classLookup.get(cls)
+
 
 #Process xls row to csv string
 def rowToCsv(row):

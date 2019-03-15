@@ -163,12 +163,13 @@ for serverId in serverList:
 			serverSoftware.add((serverId, childId))
 
 fss = open("server-software.csv", "w")
-print >>fss, "Server, Type, Software, CPU, Memory, vCluster"
+print >>fss, "Server, Status, Type, Software, CPU, Memory, vCluster"
 for (serverId, softwareId) in serverSoftware:
 	type = revClassLookup.get(props.get((serverId, classPropName),'None'), 'None')
 	(cpu, mem) = extractCPUMem(serverId)
+	status = props.get((serverId, opStatusName), '')
 	vClusterId = serverVcluster.get(serverId, 'None')
 	vCluster = nodesById.get(vClusterId, ('None', ''))[0]
-	print >>fss, '%s,%s,%s,%s,%s,%s' % (nodesById[serverId][0], type, nodesById[softwareId][0],cpu, mem, vCluster)
+	print >>fss, '%s,%s,%s,%s,%s,%s,%s' % (nodesById[serverId][0], status, type, nodesById[softwareId][0],cpu, mem, vCluster)
 fss.close
 

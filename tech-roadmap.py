@@ -39,7 +39,7 @@ import xlrd
 from cmdbconstants import *
 
 roadMapTabSet = {"Workplace", "Data Centre x86-64", "Data Centre Mid Range", "Enterprise Applications", "Enterprise Infra Tools", "Enterprise Security" }
-roadMapFile = "UKF-MMB-6005 Technology Roadmap Snapshot Template.xls";
+roadMapFile = "RS components - UKT-MAC-7739_Technology_Roadmap_Snapshot_EC_V2.3.xls";
 
 roadMapCol = "EOSL Roadmap"
 eolDateCol = "EOL\nDate"
@@ -152,7 +152,19 @@ def convertCellToDate(cell):
 				try:
 					date = datetime.strptime(dateStr, "%B %Y")
 				except Exception as ex:
-					print "********************Failed to process date of : %s : %s" % (dateStr, ex)
+					try:
+						date = datetime.strptime(dateStr, "%d %b %Y")
+					except Exception as ex:
+						try:
+							date = datetime.strptime(dateStr, "%dth %b %Y")
+						except Exception as ex:
+							try:
+								date = datetime.strptime(dateStr, "%B %d, %Y")
+							except Exception as ex:
+								try:
+									date = datetime.strptime(dateStr, "%B %d %Y")
+								except Exception as ex:
+									print "********************Failed to process date of : %s : %s" % (dateStr, ex)
 	elif cell.ctype == 2 or cell.ctype == 3:
 		#Excel date
 		try:
@@ -209,6 +221,7 @@ for sys in sysSoftware:
 	sysNew = nameMapping.get(sys, sys)
 	#Check not direct match (this will be found in mapping entry)
 	tech = roadMapDates.get(sysNew, None)
+	matched = False
 	if tech == None:
 		#Find the version in the system software
 		words = sys.split()
@@ -222,7 +235,6 @@ for sys in sysSoftware:
 					if isNumber(w): sysVersion = w
 
 		#print sys, sysVersion
-		matched = False
 		for tech in roadMapDates:
 			#Check how many words match
 			#Note: first word must match, as should the version (if present)
@@ -240,12 +252,13 @@ for sys in sysSoftware:
 				matches[sysSoftware[sys]] = (sys, tech, date[0], date[1])
 				matched = True
 				break
-		if not matched:
-			unmatched.append(sys)
 	else:
 		date = roadMapDates[sysNew]
 		matches[sysSoftware[sys]] = (sys, sysNew, date[0], date[1])
+		matched = True
 		#print "Found exact match: %s is %s" % (sys, sys)
+	if not matched:
+		unmatched.append(sys)
 	
 #Add eol properties to matched nodes
 for m in matches:
@@ -275,7 +288,11 @@ fread.close
 	
 fprops = open("unmatched.csv", "w")
 for m in unmatched:
-	print >>fprops, '"%s"' % (m)
+	#Only add if Software element doesnt already have EoL property 
+	eol = props.get((nodeId, eolPropName), 'None')
+	eosl = props.get((nodeId, eoslPropName), 'None')
+	if (eol == 'None' and eosl == 'None'):
+		print >>fprops, '"%s"' % (m)
 fprops.close
 
 fprops = open("software-EoL-Dates.csv", "w")

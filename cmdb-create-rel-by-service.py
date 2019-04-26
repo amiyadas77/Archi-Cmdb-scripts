@@ -181,7 +181,7 @@ for lstr in fcmdb:
 	cmdbId = fields[cols[propRevLookup[cmdbIdName]]]
 	name = fields[cols["Name"]].lower()
 	status = fields[cols[propRevLookup[statusName]]]
-	if status == "Retired": continue
+	#if status == "Retired": continue
 	if name in nodesByName:
 		nodeId = nodesByName[name]
 		archieIdtoCmdbId[nodeId] = cmdbId
@@ -247,7 +247,7 @@ freltemplate = open("cmdb-relations-template.csv")
 for t in freltemplate:
 	print >>frels,t
 freltemplate.close
-print >>freadable, "Parent, Child, Child Class, Child OS, Child OS Family, Child Device, Child Function, Child IP Addr, Relationship, Strength, Outage"
+print >>freadable, "Service, Asset, CMDB Id, Asset Type, Model, Child OS, Child OS Family, Child Device, Child Function, Child IP Addr, Relationship, Strength, Outage"
 for d in cmdbRelSet:
 	#operation,p_unique_id,p_class,p_name,p_company,type,c_unique_id,c_class,c_name,c_company,connection_strength,percent_outage,u_schedule,,,,,,,
 	# d= (parent, relationship, child, strength, outage)
@@ -264,11 +264,13 @@ for d in cmdbRelSet:
 	if childClass == lparServerStr: childClass = aixServerStr  #Convert class to AIX rather than the mainframe lpar
 	fn = props.get((child, fnName), '')
 	if fn == "Unknown": fn = ''
+	model = props.get((child, modelName), '')
+	if model == "Unknown": model = ''
 	ipAddress = props.get((child, ipName), '')
+	if ipAddress == "Unknown": ipAddress = ''
 	status = props.get((child, statusName), '')
 	devType = props.get((child, deviceTypeName), '')
 	if devType == "Unknown": devType = ''
-	if ipAddress == "Unknown": ipAddress = ''
 	childOs = props.get((child, osName), '')
 	if childOs == "Unknown": childOs = ''
 	osFamily = ''
@@ -278,7 +280,7 @@ for d in cmdbRelSet:
 	elif "aix" in oslower or "unix" in oslower or "sun" in oslower: osFamily = "Unix"
 	elif "esx" in oslower: osFamily = "Proprietary"
 
-	print >>freadable, '%s,%s,%s,%s,%s,%s,%s,%s,%s, %s,%s' % (nodesById[parent],nodesById[child],childClass,childOs,osFamily,devType,fn,ipAddress, d[1],d[3],d[4])
+	print >>freadable, '%s,%s,%s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s' % (nodesById[parent],nodesById[child],archieIdtoCmdbId[child],revClassLookup[childClass], model, childOs,osFamily,devType,fn,ipAddress, d[1],d[3],d[4])
 	#Use the following for actual export to CMDB
 	print >>frels, 'create,%s,,,,%s,%s,,,%s,%s,,' % (archieIdtoCmdbId[parent],d[1],archieIdtoCmdbId[child],d[3],d[4])
 frels.close	

@@ -27,6 +27,8 @@ addedIPAlready = dict() # keyed by server name, true if already added an IP addr
 
 nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
 vmProcessed = list() # list of Vm names that have been processed in file
+vmPoweredOn = dict() # dict of whether the VM is poweredOn (True) or poweredOff (False). 
+#Note If set to true then if VM found to be powered off it does not reset it (as the VM may have been moved)
 
 sysSoftware = dict() #id keyed by systemsoftware
 clusterStats = dict() # cluster stats by name. Tuple of (used cpu cores, used cpu Ghz, used memory, total cores, effective GHz, effective Mem, no of VMs)
@@ -390,8 +392,13 @@ def processVInfo(cols, row):
 		for d in range(1,len(parts)):
 			domain += parts[d] + '.'
 		domain = domain.rstrip('.')
+	if server.lower() in nodesByName:
+		#Existing server still in rvtools and so has not been decommissioned - remove any comment in description
+		desc = nodeDescByName[server.lower()].strip('"')
+		replaceDocStr(servers, server, "", False, lambda line: ("Note: DECOMMISSIONED SERVER\n" in line))
 	#Skip VMs powered off
 	if powered != "poweredOff":
+		vmPoweredOn[server.lower()] = True;
 		hostId = ""
 		# if host in hosts :
 			# hostId = hosts[host][0]
@@ -399,8 +406,11 @@ def processVInfo(cols, row):
 			# hostId = nodesByName[host]
 		if server.lower() in nodesByName:
 			id = nodesByName[server.lower()]
-			docStr = "%s vCPU %s RAM" % (cpus, ram)
+			#Check not currently showing as powered off in description
+			desc = nodeDescByName[server.lower()].strip('"')
+			replaceDocStr(servers, server, "", False, lambda line: ("Note: VM powered off\n" in line))
 			#Look for CPU desc already in
+			docStr = "%s vCPU %s RAM" % (cpus, ram)
 			replaceDocStr(servers, server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
 			#Check relationships are set
 			# if hostId != "":
@@ -512,16 +522,7 @@ def processVInfo(cols, row):
 				props[(id, modelName)] = "Virtual Machine"
 				props[(id, manuName)] = "VMware"
 			#Check Operational status and set to powered off
-			state = existingProps.get((id, opStatusName), None)
-			if state != "Powered Off":
-				print "Setting %s to Powered off - currently set to %s" % (server, state)
-				props[(id, opStatusName)] = "Powered Off"
-				desc = nodeDescByName[server.lower()].strip('"')
-				#Amend desc
-				newDesc = "Note: VM powered off\n%s" % desc
-				servers[server] = (id, newDesc)
-			monitored = existingProps.get((id, isMonitoredName), None)
-			if monitored.lower() == "true" : props[(id, isMonitoredName)] = "FALSE"
+			if not vmPoweredOn.get(server.lower(), False): vmPoweredOn[server.lower()] = False;
 
 def processVCPU(cols, row):
 	server = row[cols[vm]].value.strip()
@@ -572,7 +573,6 @@ def processVPartition(cols, row):
 		#Look for Disk desc already in desc
 		newDiskStr = "Disk: %s Size" % disk
 		replaceDocStr(servers, server, docStr, False, lambda line: (newDiskStr in line))
-
 
 #Find description against the node and replace it. 
 #Arguments: <dict containing new / changed nodes with the value (id, desc)>,<name of node containing desc>, <New Str to add or replace>, 
@@ -786,14 +786,31 @@ for vClust in clusterStats:
 		docStr += "%0.1f GB RAM " % ((stats[2]/1024)/numVms)
 	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Average VM Size:" in line))	
 
-	
+for serverName in vmPoweredOn:
+	if not vmPoweredOn[serverName]: 
+		#Server is set to powered off
+		id = nodesByName[serverName]
+		state = existingProps.get((id, opStatusName), None)
+		if state != "Powered Off":
+			print "Setting %s to Powered off - currently set to %s" % (serverName, state)
+			props[(id, opStatusName)] = "Powered Off"
+			desc = nodeDescByName[serverName].strip('"')
+		#Amend desc
+		desc = nodeDescByName[serverName].strip('"')
+		vmDesc = "Note: VM powered off\n"
+		if vmDesc not in desc:
+			newDesc = vmDesc + desc
+			servers[serverName] = (id, newDesc)
+		monitored = existingProps.get((id, isMonitoredName), None)
+		if monitored != None and monitored.lower() == "true" : props[(id, isMonitoredName)] = "FALSE"
+
 #Proces remaining vmSet - these are VMs that are not in RVtools and so should be marked as decommmissioned
 print "Processing Archi list of VMs - decommissioning ones that are not in RvTools"
 for id in vmSet:
 	name = nodesById[id]
 	#print "%s server not in RVtools list - marking as decommissioned" % name
 	#Check Operational status
-	if name.startswith("NIE-TH-TLG") or name.lower().startswith("redhat90") or name.lower().startswith("srv-hps-nie-ercgb"): continue  # Ignore tooling server until it is managed by the cloud team
+	#if name.startswith("NIE-TH-TLG") or name.lower().startswith("redhat90") or name.lower().startswith("srv-hps-nie-ercgb"): continue  # Ignore tooling server until it is managed by the cloud team
 	state = existingProps.get((id, opStatusName), None)
 	if state != "Disposed" and state != "Decommissioned":
 		print "Setting %s to Disposed" % name

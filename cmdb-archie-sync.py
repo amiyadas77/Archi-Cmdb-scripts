@@ -2,6 +2,10 @@
 #Compares CMDB export with Archie export and creates both Archie and CMDB import entries
 #Author: Danny Andersen
 
+#TODO 
+# App changes are replicated back?
+# Server desc not replicated back?
+
 import sys
 import uuid
 import csv
@@ -207,8 +211,8 @@ for lstr in fcmdb:
 	
 	cmdbId = fields[cols[propRevLookup[cmdbIdName]]]
 	classField = fields[cols[propRevLookup[classPropName]]]
-	status = fields[cols[propRevLookup[statusName]]]
-	opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
+	#status = fields[cols[propRevLookup[statusName]]]
+	#opStatus = fields[cols[propRevLookup[opStatusName]]].strip()
 	#print cmdbId, classField, status, fields[cols['Updates']]
 	#opStatus = 
 	#if status == "Retired": continue
@@ -353,6 +357,8 @@ for lstr in fcmdb:
 	csvList.append(fullStr)
 	fullStr = ''
 	fields = csv.reader(csvList, delimiter=',', quotechar = '"').next()
+	fields.append('')
+	endFields = len(fields) - 1
 	#fields = fullStr.rstrip('\n\r').split(",")
 	cmdbId = fields[cols[propRevLookup[cmdbIdName]]].strip()
 	if cmdbId == '':
@@ -368,7 +374,7 @@ for lstr in fcmdb:
 	classField = fields[cols[propRevLookup[classPropName]]].strip()
 	status = fields[cols[propRevLookup[statusName]]].strip()
 	deviceType = fields[cols[propRevLookup[deviceTypeName]]].strip()
-	funType = fields[cols[propRevLookup[fnName]]].strip()
+	funType = fields[cols.get(propRevLookup[fnName], endFields)].strip()
 	ipAddr = fields[cols[propRevLookup[ipName]]].strip()
 	#print cmdbId, name, classField, status, fields[cols['Updates']]
 	subnet = ('0', '0', '0')

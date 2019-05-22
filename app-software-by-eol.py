@@ -1,9 +1,8 @@
-#Archie EA tool to Snow CMDB synchronisation script
-#Creates CMDB relationship import file based on all dependencies for all business services and applications
-#Note: Snow CMDB does not support transitive dependencies and so everything must be explicitly defined.
+#Determines all applications and what system software it uses
+#For each system software it includes the end of support dates and a list of servers it is installed on for that application
+#Can be used to flag up EoL / EoS issues for systems / applications
+#Also spits out for each server the applications that it serves
 #Author: Danny Andersen
-
-#TODO: Compare CMDB relationship export with relationships and only add entries that are different / new / dropped
 
 import sys
 import uuid
@@ -15,6 +14,10 @@ allRels = set() #Set of all relationships (parent, rel, child)
 appRelSet = set() #Set of dependencies (parent, relationship, child) for an application
 classByNode = dict() # Keyed by node id, the Cmdb class of the node
 appsList = list() # list of application ids
+serverList = set() # set of server ids
+appsByServer = dict() # list of application ids keyed by server id
+vCluster = set() # set of TechnologyCollaboration that are a Vmware cluster
+serverVcluster = dict() # Keyed by serverId, the vClusterId it belongs to
 sysSoftware = list() # list of system software ids
 appsChildren = dict() # Keyed by apps id, the set of children 
 appsSoftwareWithNodes = dict() # Keyed by "(apps id, child id)" the set of nodes with that combination (i.e. node is child of an app and hosts the software) 
@@ -52,6 +55,8 @@ for line in fnodes:
 	nodesByName[lowerName] = id
 	nodeType = fs[1].strip('"')
 	nodesById[id] = (name, nodeType)
+	if nodeType == "TechnologyCollaboration" and "vcluster" in lowerName:
+		vCluster.add(id)
 	#if nodeType == "ApplicationComponent":
 	#	appsList.append(id)
 	
@@ -76,6 +81,10 @@ for line in fprops:
 		if name == classPropName:
 			classByNode[id] = val
 			if val == appStr and nodesById[id][1] == "ApplicationComponent" : appsList.append(id)
+		#Pull out servers
+		if name == classPropName:
+			classByNode[id] = val
+			if val in serverClasses : serverList.add(id)
 	lstr = ""
 fprops.close
 
@@ -104,6 +113,8 @@ for line in frels:
 			else: 
 				depends[targetId] = set([rel])
 		elif type == "AssignmentRelationship" or type == "AggregationRelationship" or type == "CompositionRelationship":
+			if srcId in vCluster and targetId in serverList:
+				serverVcluster[targetId] = srcId
 			rel = (targetId, srcId, type)
 			if srcId in depends: 
 				depends[srcId].add(rel)
@@ -174,6 +185,14 @@ while repeat:
 							#print "Adding node %s" % nodesById[child2][0]
 							nodes.add(nodesById[child2][0])
 				if repeat: break
+			if child in serverList:
+				#Add application to server apps list
+				if child in appsByServer:
+					apps = appsByServer[child]
+					if app not in apps:
+						apps.append(app)
+				else:
+					appsByServer[child] = [app]
 		if repeat: break
 
 freadable = open("apps-software-eol.csv", "w")
@@ -194,3 +213,25 @@ for app in appsChildren:
 		#print >>freadable, '%s,%s,%s,%s' % (nodesById[app][0],nodesById[app][1], nodesById[child][0],nodesById[child][1])
 freadable.close
 
+freadable = open("serversAndApps.csv", "w")
+print >>freadable, "Server, Op Status, Type, Operating System, IP Address, vCluster, Applications"
+for serverId in appsByServer:
+	status = props.get((serverId, opStatusName), '')
+	type = revClassLookup.get(props.get((serverId, classPropName),'None'), 'None')
+	#(cpu, mem) = extractCPUMem(serverId)
+	#deviceType = props.get((serverId, deviceTypeName), '')
+	#model = props.get((serverId, modelName), '')
+	opSystem = props.get((serverId, osName), '')
+	ipAddress = props.get((serverId, ipName), '')
+	vClusterId = serverVcluster.get(serverId, 'None')
+	vCluster = nodesById.get(vClusterId, ('None', ''))[0]
+	appStr = ""
+	first = True
+	for app in appsByServer[serverId]:
+		if not first: 
+			appStr += "; "
+		else:
+			first = False
+		appStr += "%s" % (nodesById[app][0])
+	print >>freadable, '%s,%s,%s,%s,%s,%s,%s' % (nodesById[serverId][0], status, type, opSystem, ipAddress, vCluster, appStr)
+freadable.close

@@ -100,7 +100,6 @@ groupStr = "cmdb_ci_group"
 
 classPropName = "CMDB Class"
 cmdbIdName = "CMDB ID"
-osName = "CMDB Operating System"
 strengthPropStr = "CMDB-REL Strength"
 outagePropStr = "CMDB-REL Outage"
 deviceTypeName = "CMDB Device Type"
@@ -171,7 +170,8 @@ def convertClassToStr(cls) :
 def rowToCsv(row):
 	out = ""
 	for c in row:
-		out += unicode(c.value).encode("ascii")
+		u = unicode(c.value)
+		out += u.encode('ascii', errors='ignore')
 		out += ","
 	return out
 	

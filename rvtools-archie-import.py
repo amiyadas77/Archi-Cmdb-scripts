@@ -140,15 +140,32 @@ fnodes.close
 frels = open("relations.csv")
 count = 0
 lstr = ""
-for line in frels:
+prevStr = False
+for lstr in fnodes:
 	count += 1
 	if count == 1: continue
-	lstr += line.rstrip('\n\r')
-	if lstr.endswith('"'):
-		fs = lstr.split(",")
-		relKey = (fs[4].strip('"'), fs[1].strip('"'),fs[5].strip('"'))
-		existingRels[relKey] = fs[0].strip('"')
-		lstr = ""
+	if lstr.count('"') % 2 == 1:
+		#Multi-line entry
+		fullStr += lstr
+		if not prevStr: #First line (else last)
+			prevStr = True
+			continue
+	elif prevStr:
+		#Continuing line 
+		fullStr += lstr
+		continue
+	else : #Not multi-line
+		fullStr = lstr
+	prevStr = False
+	#print fullStr
+	csvList = list()
+	csvList.append(fullStr)
+	#fs = csv.reader(csvList, delimiter=',', quotechar = '"').next()
+	fs = fullStr.rstrip('\n\r').split(",")
+	fullStr = ''
+	relKey = (fs[4].strip('"'), fs[1].strip('"'),fs[5].strip().strip('"'))
+	existingRels[relKey] = fs[0].strip('"')
+	lstr = ""
 frels.close
 
 #Read in existing properties

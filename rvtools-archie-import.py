@@ -13,7 +13,7 @@ import io
 import xlrd
 from cmdbconstants import *
 
-rels=list()
+rels=list() #New relationships to add
 netrels=list() #List of tuples (parent, type, child, name)
 existingRels = dict() #Key = (parent, type, child), val = rel id
 existingProps = dict() #Keyed by node id + property name
@@ -141,7 +141,7 @@ frels = open("relations.csv")
 count = 0
 lstr = ""
 prevStr = False
-for lstr in fnodes:
+for lstr in frels:
 	count += 1
 	if count == 1: continue
 	if lstr.count('"') % 2 == 1:
@@ -164,8 +164,8 @@ for lstr in fnodes:
 	fs = fullStr.rstrip('\n\r').split(",")
 	fullStr = ''
 	relKey = (fs[4].strip('"'), fs[1].strip('"'),fs[5].strip().strip('"'))
+	#print "Existing: %s %s %s" % relKey
 	existingRels[relKey] = fs[0].strip('"')
-	lstr = ""
 frels.close
 
 #Read in existing properties
@@ -435,7 +435,9 @@ def processVInfo(cols, row):
 				# if not (rel in existingRels): rels.append(rel)
 			if clustId is not None:
 				rel = (clustId, "CompositionRelationship", nodesByName[server.lower()])
-				if not (rel in existingRels): rels.append(rel)
+				if rel not in existingRels: 
+					#print "Adding rel %s %s %s" % rel
+					rels.append(rel)
 				docStr = "%s" % (vClust)
 				#Look for Cluster desc already in
 				replaceDocStr(servers, server, docStr, False, lambda line: (line.startswith('Cluster') or "vCluster" in line))
@@ -450,7 +452,7 @@ def processVInfo(cols, row):
 					nodesById[osid] = osystem  #Add to node array to resolve id to name
 					sysSoftware[osystem.lower()] = osid #Add to existing node set
 					rel = (id, "AssignmentRelationship", osid)
-					if rel not in existingRels : rels.append(rel)
+					rels.append(rel)
 				else:
 					rel = (id, "AssignmentRelationship", sysSoftware[osystem.lower()])
 					if rel not in existingRels : rels.append(rel)
@@ -523,7 +525,7 @@ def processVInfo(cols, row):
 				rels.append(rel)
 			else:
 				rel = (id, "AssignmentRelationship", sysSoftware[osystem.lower()])
-				rels.append(rel)
+				if rel not in existingRels : rels.append(rel)
 			if domain != '':
 				props[(id, domainName)] = domain
 	else:

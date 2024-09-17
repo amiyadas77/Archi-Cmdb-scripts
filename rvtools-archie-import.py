@@ -1,8 +1,8 @@
-#Compares Vmware RVTools export files with Archie export and creates new Archie import for elements / properties / rels 
+#Compares Vmware RVTools export files with Archie export and creates new Archie import for elements / properties / rels
 #Author: Danny Andersen
 
-#TODO 
-#Process vDatastore tab - associate Datastores to cluster summary through hosts and datastore usage, free 
+#TODO
+#Process vDatastore tab - associate Datastores to cluster summary through hosts and datastore usage, free
 #Include NIE-TH-TLG hosts once Tooling cluster part of the RVtools
 
 import sys
@@ -11,6 +11,7 @@ import uuid
 import io
 
 import xlrd
+import csv
 from cmdbconstants import *
 
 rels=list() #New relationships to add
@@ -22,12 +23,12 @@ nodesFirstName = dict() #id keyed by nodes first word
 nodeDescByName = dict() #dict of node descriptions keyed by name
 vmSetRaw = set() #Set of VM ids found in Archie before removing unwanted ones (LPARs, etc)
 vmSet = set() # set of VM ids in Archie
-collabs = dict() #Dictionary of technical collaborations, keyed by name, value is ID 
+collabs = dict() #Dictionary of technical collaborations, keyed by name, value is ID
 addedIPAlready = dict() # keyed by server name, true if already added an IP address - this means it should be added, not replaced.
 
 nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
 vmProcessed = list() # list of Vm names that have been processed in file
-vmPoweredOn = dict() # dict of whether the VM is poweredOn (True) or poweredOff (False). 
+vmPoweredOn = dict() # dict of whether the VM is poweredOn (True) or poweredOff (False).
 #Note If set to true then if VM found to be powered off it does not reset it (as the VM may have been moved)
 
 sysSoftware = dict() #id keyed by systemsoftware
@@ -46,6 +47,7 @@ cpusByVM = dict() # no of cpus keyed by VM name
 powerStateByServer = dict() # Powered state by server name
 
 clStr = "Cluster"
+
 nameStr = "Name"
 numHostsStr = "NumHosts"
 numCoresStr = "NumCpuCores"
@@ -59,8 +61,8 @@ overAllStr = "Overall"
 maxStr = "Max"
 memoryStr = "Memory"
 consumedStr = "Consumed"
-sizeMemoryStr = "Size MB"
-ipStr = "IP Address"
+sizeMemoryStr = "Size MiB"
+ipStr = "IPv4 Address"
 osStr = "OS"
 osTools = "OS according to the VMware Tools"
 hostStr = "Host"
@@ -73,18 +75,19 @@ noCoresStr = "# Cores"
 noMemory = "# Memory"
 networkStr = "Network"
 diskStr = "Disk"
-capStr = "Capacity MB"
-consumedStr = "Consumed MB"
-freeStr = "Free MB"
+capStr = "Capacity MiB"
+consumedStr = "Consumed MiB"
+freeStr = "Free MiB"
 freepStr = "Free %"
 
 # rvToolsLookup = {cpuStr: cpuName, memoryStr: memName, \
 					# osStr: osName, ipStr: ipName }
-					
+
 #Read in existing nodes from exported file
 fnodes = open("elements.csv", "r")
 count = 0
 prevStr = False
+fullStr = '' #Amiya
 for lstr in fnodes:
 	count += 1
 	if count == 1: continue
@@ -95,7 +98,7 @@ for lstr in fnodes:
 			prevStr = True
 			continue
 	elif prevStr:
-		#Continuing line 
+		#Continuing line
 		fullStr += lstr
 		continue
 	else : #Not multi-line
@@ -121,17 +124,17 @@ for lstr in fnodes:
 	nodesByName[lowerName] = id
 	nodeDescByName[lowerName] = unicode(desc, "ascii", errors='ignore')
 	firstName = ''
-	if nodeType == "Node" and "(" in name: 
+	if nodeType == "Node" and "(" in name:
 		firstName = lowerName.split(" ")[0]
 		nodesFirstName[firstName] = id
-	if nodeType == "Node" and "." in name: 
+	if nodeType == "Node" and "." in name:
 		firstName = lowerName.split(".")[0]
 		nodesFirstName[firstName] = id
 	if nodeType == "SystemSoftware":
 		sysSoftware[name.lower()] = id
 	if nodeType == "TechnologyCollaboration":
 		collabs[name] = id
-	
+
 fnodes.close
 
 #print "Existing nodes: " + str(count) + ": " + str(len(nodes))
@@ -151,7 +154,7 @@ for lstr in frels:
 			prevStr = True
 			continue
 	elif prevStr:
-		#Continuing line 
+		#Continuing line
 		fullStr += lstr
 		continue
 	else : #Not multi-line
@@ -203,6 +206,7 @@ for vmId in vmSetRaw:
 	#Check class to not include unwanted ones (not Vmware VMs)
 	cls = allPropsById[vmId].get(classPropName, '')
 	if cls != aixServerStr and cls != esxServerStr and cls != dbSqlStr:
+		#amiya
 		#print "Adding VM: %s to list" % nodesById[vmId]
 		vmSet.add(vmId)
 
@@ -216,7 +220,7 @@ def processVCluster(cols, ros):
 	effCpuG = row[cols[effCpuGStr]].value
 	effMemG = row[cols[effMemGStr]].value
 	if cluster != '':
-		vClust = "%s %s" % (cluster, "vCluster")
+		vClust = "%s %s" % (cluster, "Cluster")
 		clustId = collabs.get(vClust, None)
 		if clustId is None:
 			collab = newCollabs.get(vClust, None)
@@ -248,7 +252,7 @@ def processVHost(cols, row):
 	cluster = row[cols[clStr]].value.strip()
 	clustId = None
 	if cluster != '':
-		vClust = "%s %s" % (cluster, "vCluster")
+		vClust = "%s %s" % (cluster, "Cluster")
 		if vClust not in clusterStats:
 			clusterStats[vClust] = (0,0,0,0,0,0,0)
 		clustId = collabs.get(vClust, None)
@@ -280,12 +284,12 @@ def processVHost(cols, row):
 		if (hostId, domainName) not in existingProps and domain != '':
 			props[(hostId, domainName)] = domain
 		if clustId is not None:
-			rel = (clustId, "CompositionRelationship", hostId)
+			rel = (clustId, "AggregationRelationship", hostId)
 			if not (rel in existingRels): rels.append(rel)
 	else:
 		print "------> Found new vm host: " + host
 		docStr = "VM Host Server\nServer Model: " + serverModel
-		docStr += "\nOperating System: " + esx 
+		docStr += "\nOperating System: " + esx
 		docStr += "\nProcessor: " + cpuModel
 		docStr += "\n%s CPU %s Cores %s RAM" % (cpus, cores, ram)
 		docStr += "\nVCenter cluster: " + cluster
@@ -293,7 +297,7 @@ def processVHost(cols, row):
 		hosts[host] = (id, docStr)
 		nodesById[id] = host
 		if clustId is not None:
-			rels.append((clustId, "CompositionRelationship", id))
+			rels.append((clustId, "AggregationRelationship", id))
 		props[(id, classPropName)] = "cmdb_ci_esx_server"
 		props[(id, deviceTypeName)] = "Physical Server"
 		props[(id, osName)] = esx
@@ -302,13 +306,17 @@ def processVHost(cols, row):
 def processVNetwork(cols, row):
 	#Find subnet
 	server = row[cols[vm]].value.strip()
+	#Amiya exclude .shadow or .copy srevers
+	if ".shadow" in server or ".copy" in server.lower():
+		print "excluding server %s in processVNetwork" % server
+		return
 	if server in nameSwap: server = nameSwap[server]
-	if lowerName == "nie-ctx-sso-01": 
+	if lowerName == "nie-ctx-sso-01":
 		print "NOTE: Skipping server %s as duplicate" % server
 		return
 	ipAddr = row[cols[ipStr]].value.strip()
 	powered = row[cols[powerState]].value.strip()
-	network = row[cols[networkStr]].value.strip()
+	network = str(row[cols[networkStr]].value).strip()  #Amiya added.str.strip
 	#print server, ipAddr
 	if powered != "poweredOff" and ipAddr != "unknown":
 		if ':' or ',' in ipAddr:
@@ -319,7 +327,7 @@ def processVNetwork(cols, row):
 				if '.' in f:
 					ipAddr = f.strip()
 					break
-		if ipAddr != '' : 
+		if ipAddr != '' :
 			subnet = ('0', '0', '0')
 			subnet = findSubnet(ipAddr)
 			id = nodesByName[server.lower()]
@@ -342,21 +350,25 @@ def processVNetwork(cols, row):
 def processVInfo(cols, row):
 	server = row[cols[vm]].value.strip()
 	#print "Processing %s" % server
+	# Amiya exclude .shadow or .copy srevers
+	if ".shadow" in server or ".copy" in server.lower():
+		print "excluding server %s in processVInfo" % server
+		return
 	lowerName = server.lower()
-	# if ("nie-th-tm-" in lowerName or "nie-dg-tm-" in lowerName) and "-0" not in lowerName : 
+	# if ("nie-th-tm-" in lowerName or "nie-dg-tm-" in lowerName) and "-0" not in lowerName :
 		# newName = server.replace('01',  "-01")
 		# newName = newName.replace('02',  "-02")
 		# nameSwap[server] = newName
 		# server = newName
-	if lowerName == "nie-ctx-sso-01": 
+	if lowerName == "nie-ctx-sso-01":
 		print "NOTE: Skipping server %s as duplicate" % server
 		return
-	if lowerName == "nie-ctx-sso-01_new": 
+	if lowerName == "nie-ctx-sso-01_new":
 		newName = "NIE-CTX-SSO-01"
 		nameSwap[server] = newName
 		server = newName
 	osCol = cols.get(osStr, cols.get(osTools))
-	if osCol is None: 
+	if osCol is None:
 		print "Failed to find OS column"
 		osystem = ''
 	else:
@@ -371,6 +383,7 @@ def processVInfo(cols, row):
 		if id is not None:
 			if id in vmSet:
 				#Remove found VM from list
+				print "dns not equal to server %s" % id
 				vmSet.remove(id)
 			#Use dnsName rather than VM name as the Archi / CMDB name
 			print "WARNING: Server %s has a different DNS name: %s, using fqdn name" % (server,fqdn)
@@ -382,7 +395,7 @@ def processVInfo(cols, row):
 	vmProcessed.append(oldName)
 	cluster = row[cols[clStr]].value.strip()
 	if cluster != '':
-		vClust = "%s %s" % (cluster, "vCluster")
+		vClust = "%s %s" % (cluster, "Cluster")
 		clustId = collabs.get(vClust, None)
 		if clustId is None:
 			collab = newCollabs.get(vClust, None)
@@ -392,7 +405,7 @@ def processVInfo(cols, row):
 			clustId = str(uuid.uuid4())
 			newCollabs[vClust] = (clustId, "Vmware vSphere Cluster")
 			nodesById[clustId] = vClust
-	else: 
+	else:
 		clustId = None
 		vClust = ''
 	powerStateByServer[server] = powered
@@ -415,6 +428,9 @@ def processVInfo(cols, row):
 		replaceDocStr(servers, server, "", False, lambda line: ("Note: DECOMMISSIONED SERVER\n" in line))
 	#Skip VMs powered off
 	if powered != "poweredOff":
+		#amiya
+		#if server.lower() == "NIE-HVH-MAX-02":
+		#print "###### %s %s" % (server, powered);
 		vmPoweredOn[server.lower()] = True;
 		hostId = ""
 		# if host in hosts :
@@ -431,16 +447,16 @@ def processVInfo(cols, row):
 			replaceDocStr(servers, server, docStr, False, lambda line: ("CPU" in line and "RAM" in line))
 			#Check relationships are set
 			# if hostId != "":
-				# rel = (hostId, "CompositionRelationship", nodesByName[server])
+				# rel = (hostId, "AggregationRelationship", nodesByName[server])
 				# if not (rel in existingRels): rels.append(rel)
 			if clustId is not None:
-				rel = (clustId, "CompositionRelationship", nodesByName[server.lower()])
-				if rel not in existingRels: 
+				rel = (clustId, "AggregationRelationship", nodesByName[server.lower()])
+				if rel not in existingRels:
 					#print "Adding rel %s %s %s" % rel
 					rels.append(rel)
 				docStr = "%s" % (vClust)
 				#Look for Cluster desc already in
-				replaceDocStr(servers, server, docStr, False, lambda line: (line.startswith('Cluster') or "vCluster" in line))
+				replaceDocStr(servers, server, docStr, False, lambda line: (line.startswith('Cluster') or "Cluster" in line))
 			if osystem != '' :
 				docStr = "Operating System: %s" % (osystem)
 				#Look for OS desc already in
@@ -482,7 +498,9 @@ def processVInfo(cols, row):
 				props[(id, domainName)] = domain
 			if id in vmSet:
 				#Remove found VM from set
+				#amiya
 				#print "Found Vm %s with id %s" % (server, id)
+
 				vmSet.remove(id)
 			elif oldName == server: # Dont add props if using fqdn name
 				print "VM %s not in Archie Vm list - setting virtual server properties" % server
@@ -499,9 +517,9 @@ def processVInfo(cols, row):
 			nodesById[id] = server
 			nodesByName[server.lower()] = id
 			if clustId is not None:
-				rels.append((clustId, "CompositionRelationship", id))
+				rels.append((clustId, "AggregationRelationship", id))
 			# if hostId != "" :
-				# rels.append((hostId, "CompositionRelationship", id))
+				# rels.append((hostId, "AggregationRelationship", id))
 			if "windows" in osystem.lower():
 				props[(id, classPropName)] = "cmdb_ci_win_server"
 			elif "linux" in osystem.lower():
@@ -534,6 +552,7 @@ def processVInfo(cols, row):
 			#Remove from vmSet as its only poweredoff (and not decommissioned)
 			if id in vmSet:
 				#Remove found VM from list
+				print "Remove from vmSet as its only poweredoff (and not decommissioned) %s" % id
 				vmSet.remove(id)
 			elif oldName == server: # Dont add props if using fqdn name
 				print "Powered off VM %s not in Archie Vm list - setting virtual server properties" % server
@@ -545,14 +564,18 @@ def processVInfo(cols, row):
 
 def processVCPU(cols, row):
 	server = row[cols[vm]].value.strip()
+	# Amiya exclude .shadow or .copy srevers
+	if ".shadow" in server or ".copy" in server.lower():
+		print "excluding server %s in processVCPU" % server
+		return
 	#print "Server %s in swap %s" % (server, server in nameSwap)
-	if server in nameSwap: 
+	if server in nameSwap:
 		#print "Server %s swap to %s" % (server, nameSwap[server])
 		server = nameSwap[server]
 	powered = powerStateByServer[server]
 	if powered != "poweredOff":
 		cluster = row[cols[clStr]].value.strip()
-		vClust = "%s %s" % (cluster, "vCluster")
+		vClust = "%s %s" % (cluster, "Cluster")
 		cpus = row[cols[cpuStr]].value
 		cpuGHz = row[cols[maxStr]].value
 		stats = clusterStats[vClust]
@@ -560,17 +583,25 @@ def processVCPU(cols, row):
 
 def processVMemory(cols, row):
 	server = row[cols[vm]].value.strip()
+	# Amiya exclude .shadow or .copy srevers
+	if ".shadow" in server or ".copy" in server.lower():
+		print  "excluding server %s in processVMemory" % server
+		return
 	if server in nameSwap: server = nameSwap[server]
 	powered = powerStateByServer[server]
 	if powered != "poweredOff":
 		cluster = row[cols[clStr]].value.strip()
-		vClust = "%s %s" % (cluster, "vCluster")
+		vClust = "%s %s" % (cluster, "Cluster")
 		ram = row[cols[sizeMemoryStr]].value
 		stats = clusterStats[vClust]
 		clusterStats[vClust] = (stats[0], stats[1], stats[2] + ram, stats[3], stats[4], stats[5], stats[6])
 
 def processVPartition(cols, row):
 	server = row[cols[vm]].value.strip()
+	# Amiya exclude .shadow or .copy srevers
+	if ".shadow" in server or ".copy" in server.lower():
+		print "excluding server %s in processVPartition" % server
+		return
 	if server in nameSwap: server = nameSwap[server]
 	powered = powerStateByServer[server]
 	if powered != "poweredOff":
@@ -593,8 +624,8 @@ def processVPartition(cols, row):
 		newDiskStr = "Disk: %s Size" % disk
 		replaceDocStr(servers, server, docStr, False, lambda line: (newDiskStr in line))
 
-#Find description against the node and replace it. 
-#Arguments: <dict containing new / changed nodes with the value (id, desc)>,<name of node containing desc>, <New Str to add or replace>, 
+#Find description against the node and replace it.
+#Arguments: <dict containing new / changed nodes with the value (id, desc)>,<name of node containing desc>, <New Str to add or replace>,
 #		<Whether to just add line to desc>, <Function to determine if line matches> 
 def replaceDocStr(nodes, nodeName, docStr, addNew, matchFn):
 	#print nodeName, docStr
@@ -632,7 +663,7 @@ for file in os.listdir('.'):
 	#Reset working arrays
 	nameSwap = dict() # dict of replacement server names (DNS) keyed by server name
 	vmProcessed = list() # list of Vm names that have been processed in file
-	if "RVTools" in file and (file.endswith(".xls") or file.endswith(".xlsx")):
+	if "RVTool" in file and (file.endswith(".xls") or file.endswith(".xlsx")):
 		print "********************** Processing RVtools file %s" % file
 		wb = xlrd.open_workbook(file)
 		#Process Vmware Clusters
@@ -766,17 +797,17 @@ for file in os.listdir('.'):
 #Process vCluster stats
 for vClust in clusterStats:
 	stats = clusterStats[vClust]
-	if stats[3] != 0: 
+	if stats[3] != 0:
 		freeCores = int(stats[3] - stats[0])
 		if freeCores < 0:
 			#Overallocation
 			docStr = "Used Cores: %d, Overallocation ratio: %0.1f" % (int(stats[0]), stats[0]/stats[3])
 		else:
 			docStr = "Used Cores: %d, Free Cores: %s" % (int(stats[0]), freeCores)
-	else: 
+	else:
 		docStr = "Used Cores: %d" % (int(stats[0]))
-	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Cores:" in line))	
-	if stats[4] != 0: 
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Cores:" in line))
+	if stats[4] != 0:
 		freeGig = (stats[4] - stats[1])/1024
 		if freeGig < 0.0:
 			#Overallocation
@@ -785,28 +816,28 @@ for vClust in clusterStats:
 			docStr = "Used CPU: %0.1f GHz, Free CPU: %0.1f GHz" % (stats[1]/1024, freeGig)
 	else:
 		docStr = "Used CPU: %0.1f GHz" % (stats[1]/1024)
-	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used CPU:" in line))	
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used CPU:" in line))
 	if stats[5] != 0:
 		freeMem = (stats[5] - stats[2])/1024
 		if freeMem < 0:
 			docStr = "Used Memory: %0.1f GB, **Overallocation of: %0.1f GB" % (stats[2]/1024, -freeMem)
 		else:
 			docStr = "Used Memory: %0.1f GB, Free Memory: %0.1f GB" % (stats[2]/1024, freeMem)
-	else: 
+	else:
 		docStr = "Used Memory: %0.1f GB" % (stats[2]/1024)
-	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Memory:" in line))	
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Used Memory:" in line))
 	numVms = float(stats[6])
 	docStr = "No of VMs: %d\n" % numVms
-	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("No of VMs:" in line))	
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("No of VMs:" in line))
 	docStr = "Average VM Size: "
 	if stats[0] != 0 and numVms != 0:
 		docStr += "%0.1f vCPUs " % (stats[0]/numVms)
 	if stats[2] != 0 and numVms != 0:
 		docStr += "%0.1f GB RAM " % ((stats[2]/1024)/numVms)
-	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Average VM Size:" in line))	
+	replaceDocStr(newCollabs, vClust, docStr, False, lambda line: ("Average VM Size:" in line))
 
 for serverName in vmPoweredOn:
-	if not vmPoweredOn[serverName]: 
+	if not vmPoweredOn[serverName]:
 		#Server is set to powered off
 		id = nodesByName[serverName]
 		state = existingProps.get((id, opStatusName), None)
@@ -832,7 +863,7 @@ for id in vmSet:
 	#if name.startswith("NIE-TH-TLG") or name.lower().startswith("redhat90") or name.lower().startswith("srv-hps-nie-ercgb"): continue  # Ignore tooling server until it is managed by the cloud team
 	state = existingProps.get((id, opStatusName), None)
 	if state != "Disposed" and state != "Decommissioned":
-		print "Setting %s to Disposed" % name
+		print "Setting %s to Disposed and state %s" % (name, state)
 		props[(id, opStatusName)] = "Disposed"
 		props[(id, isMonitoredName)] = "FALSE"
 		props[(id, statusName)] = "Retired"
@@ -840,29 +871,51 @@ for id in vmSet:
 		#Amend desc
 		newDesc = "Note: DECOMMISSIONED SERVER\n%s" % desc
 		servers[name] = (id, newDesc)
-	
 
-felems = open("new-elements.csv", "w")
-#felems = io.open("new-elements.csv", "w", encoding="ascii")
-print >>felems,'"ID","Type","Name","Documentation"'
-for h in hosts:
-	print >>felems,'"%s","Node","%s","%s"' % (hosts[h][0],h,hosts[h][1])
-for s in servers:
-	#print s, servers[s][0]
-	print >>felems,'"%s","Node","%s","%s"' % (servers[s][0],s, servers[s][1])
-for a in apps:
-	print >>felems,'"%s","ApplicationComponent","%s","%s"' % (apps[a][0], a, apps[a][1])
-for net in nets:
-	print >>felems,'"%s","CommunicationNetwork","%s","%s"' % (nets[net][0], net, nets[net][1])
-for d in devs:
-	print >>felems,'"%s","Device","%s","%s"' % (devs[d][0], d, devs[d][1])
-for b in buss:
-	print >>felems,'"%s","BusinessService","%s","%s"' % (buss[b][0], b, buss[b][1])
-for s in softs:
-	print >>felems,'"%s","SystemSoftware","%s","%s"' % (softs[s][0], s, softs[s][1])
-for c in newCollabs:
-	print >>felems,'"%s","TechnologyCollaboration","%s","%s"' % (newCollabs[c][0], c, newCollabs[c][1])
-felems.close
+
+# felems = open("new-elements.csv", "w")
+# #felems = io.open("new-elements.csv", "w", encoding="ascii")
+# print >>felems,'"ID","Type","Name","Documentation"'
+# for h in hosts:
+# 	print >>felems,'"%s","Node","%s","%s"' % (hosts[h][0],h,hosts[h][1])
+# for s in servers:
+# 	#print s, servers[s][0]
+# 	print >>felems,'"%s","Node","%s","%s"' % (servers[s][0],s, servers[s][1])
+# for a in apps:
+# 	print >>felems,'"%s","ApplicationComponent","%s","%s"' % (apps[a][0], a, apps[a][1])
+# for net in nets:
+# 	print >>felems,'"%s","CommunicationNetwork","%s","%s"' % (nets[net][0], net, nets[net][1])
+# for d in devs:
+# 	print >>felems,'"%s","Device","%s","%s"' % (devs[d][0], d, devs[d][1])
+# for b in buss:
+# 	print >>felems,'"%s","BusinessService","%s","%s"' % (buss[b][0], b, buss[b][1])
+# for s in softs:
+# 	print >>felems,'"%s","SystemSoftware","%s","%s"' % (softs[s][0], s, softs[s][1])
+# for c in newCollabs:
+# 	print >>felems,'"%s","TechnologyCollaboration","%s","%s"' % (newCollabs[c][0], c, newCollabs[c][1])
+# felems.close
+
+with open("new-elements.csv", "w") as felems:
+	newElemWriter = csv.writer(felems, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
+	header = ["ID", "Type", "Name", "Documentation"]
+	newElemWriter.writerow(header)
+	for h in hosts:
+		newElemWriter.writerow([hosts[h][0], "Node", h, hosts[h][1]])
+	for s in servers:
+		newElemWriter.writerow([servers[s][0], "Node", s, servers[s][1]])
+	for a in apps:
+		newElemWriter.writerow([apps[a][0], "ApplicationComponent", a, apps[a][1]])
+	for net in nets:
+		newElemWriter.writerow([nets[net][0], "CommunicationNetwork", net, nets[net][1]])
+	for d in devs:
+		newElemWriter.writerow([devs[d][0], "Device", d, devs[d][1]])
+	for b in buss:
+	 	newElemWriter.writerow([buss[b][0], "BusinessService", b, buss[b][1]])
+	for s in softs:
+		newElemWriter.writerow([softs[s][0], "SystemSoftware", s, softs[s][1]])
+	for c in newCollabs:
+		newElemWriter.writerow([newCollabs[c][0], "TechnologyCollaboration", c, newCollabs[c][1]])
+
 
 frels = open("new-relations.csv", "w")
 freadable = open("new-relations-readable.csv", "w")
@@ -875,7 +928,7 @@ for rel in rels:
 for rel in netrels:
 	print >>frels, '"","%s","%s","%s","%s","%s"' % (rel[1], rel[3], rel[4], rel[0], rel[2])
 	print >>freadable, '"%s","%s","%s","%s","%s"' % (nodesById[rel[0]], nodesById[rel[2]], rel[1], rel[3], rel[4])
-frels.close	
+frels.close
 
 
 fprops = open("new-properties.csv", "w")
